@@ -198,6 +198,44 @@ class CallAccessibilityService : AccessibilityService() {
         return clickNode(btn)
     }
 
+    private val captionPlaceholder = Regex("\\[[^\\]]*\\]")
+
+    private fun isCaptionMarker(t: String): Boolean =
+        t.contains("aption", true) || t.contains("subtítulo", true) || t.contains("subtitulo", true) ||
+            t.contains("Call started", true) || t.contains("Llamada iniciada", true)
+
+    /**
+     * Texto de los subtítulos instantáneos (sin el aviso "[Call started...]").
+     * Devuelve null si no hay ventana de subtítulos en pantalla, "" si está vacía.
+     */
+    fun captionText(): String? {
+        val ws = try { windows } catch (e: Exception) { emptyList() }
+        for (w in ws) {
+            val r = w.root ?: continue
+            val pkg = r.packageName?.toString() ?: ""
+            if (pkg == packageName) continue
+            val marker = find(r) { n -> isCaptionMarker(n.text?.toString() ?: "") }
+            if (marker == null && !pkg.contains("android.as") && !pkg.contains("caption", true)) continue
+            val sb = StringBuilder()
+            val root = marker?.parent ?: r
+            collectText(root, 0, sb)
+            return sb.toString()
+                .replace(captionPlaceholder, " ")
+                .replace("…", " ").replace("...", " ")
+                .replace(Regex("\\s+"), " ").trim()
+        }
+        return null
+    }
+
+    private fun collectText(n: AccessibilityNodeInfo, depth: Int, sb: StringBuilder) {
+        if (depth > 30) return
+        n.text?.let { if (it.isNotBlank()) sb.append(it).append(' ') }
+        for (i in 0 until n.childCount) {
+            val c = n.getChild(i) ?: continue
+            collectText(c, depth + 1, sb)
+        }
+    }
+
     /** Texto con todo lo que hay en pantalla (para mandar a soporte y ajustar la app). */
     fun dump(): String {
         val sb = StringBuilder()

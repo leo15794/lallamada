@@ -18,6 +18,12 @@ export const DEFAULT_CONFIG = {
   amdMachineMs: 3000,
   amdMaxMs: 5000,
   answerDelayMs: 1000,
+  capEnabled: false,
+  capListenMs: 5000,
+  capSilentMs: 3500,
+  capSilentIsMachine: true,
+  capMachineWords: 'mensaje, buzon, casilla, despues del tono, deje, grabe, no esta disponible, no se encuentra, fuera del area, apagado, no puede atender, voicemail, leave a message, after the tone, not available, mailbox, record your',
+  capHumanWords: 'hola, si, quien, diga, alo, bueno, buenas, buen dia, que tal, hello, hi, yes, who',
 };
 
 /** Verifica la contraseña (cabecera x-key). Responde 401 si no coincide. */

@@ -275,8 +275,28 @@ class CampaignService : Service() {
 
         // Detección de contestador: siempre en las pruebas (para ver el análisis), y en la campaña si está activada.
         var capture = ""
-        val useAmd = Store.mode(this) == Store.MODE_AUDIO && (captureTest || Store.amdEnabled(this))
-        if (useAmd) {
+        val useCaptions = Store.mode(this) == Store.MODE_AUDIO && Store.capEnabled(this)
+        val useAmd = !useCaptions && Store.mode(this) == Store.MODE_AUDIO && (captureTest || Store.amdEnabled(this))
+        if (useCaptions) {
+            Live.status = "Leyendo subtítulos para saber quién atendió..."
+            val (kind, info) = detectByCaptions()
+            capture = when (kind) {
+                "MACHINE" -> "BUZÓN ($info)"
+                "HUMAN" -> "persona ($info)"
+                else -> "subtítulos: $info"
+            }
+            diag("subtítulos ${c.phone}: $kind $info")
+            if (!inCall()) {
+                Live.inCall = false
+                return "atendió" to "$capture | cortó durante la escucha"
+            }
+            if (kind == "MACHINE" && Store.amdOnMachine(this) == "cortar") {
+                hangUp()
+                waitUntil(8000) { !inCall() }
+                Live.inCall = false
+                return "buzón" to capture
+            }
+        } else if (useAmd) {
             val shell = ShellBridge.service
             if (shell == null) {
                 capture = "detección: sin Shizuku"
@@ -523,6 +543,43 @@ class CampaignService : Service() {
             }
         }
         return notes.joinToString(", ")
+    }
+
+    /** Lee los subtítulos instantáneos al atender y decide si es persona o buzón. */
+    private fun detectByCaptions(): Pair<String, String> {
+        val svc = Live.service ?: return "UNKNOWN" to "accesibilidad inactiva"
+        val machine = Store.capMachineWords(this)
+        val human = Store.capHumanWords(this)
+        val maxMs = Store.capListenMs(this).toLong()
+        val silentMs = Store.capSilentMs(this).toLong()
+        val start = System.currentTimeMillis()
+        // Lo que ya estaba escrito al atender (por ejemplo, de una llamada anterior) no cuenta.
+        val base = svc.captionText().orEmpty()
+        var seen = false
+        var heard = ""
+        while (inCall()) {
+            val el = System.currentTimeMillis() - start
+            val t = svc.captionText()
+            if (t != null) seen = true
+            val all = t.orEmpty()
+            heard = if (base.isNotEmpty() && all.startsWith(base)) all.removePrefix(base).trim() else if (all == base) "" else all
+            val n = Store.norm(heard)
+            val tokens = n.split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }.toSet()
+            val m = machine.firstOrNull { it.isNotEmpty() && n.contains(it) }
+            if (m != null) return "MACHINE" to "dijo \"$m\" a los ${el / 100 / 10.0}s: «${heard.take(100)}»"
+            val h = human.firstOrNull { w -> w.isNotEmpty() && (if (w.contains(' ')) n.contains(w) else w in tokens) }
+            if (h != null) return "HUMAN" to "dijo \"$h\" a los ${el / 100 / 10.0}s: «${heard.take(100)}»"
+            if (heard.isEmpty() && el >= silentMs) {
+                if (!seen) return "UNKNOWN" to "no encontré los subtítulos en pantalla"
+                return if (Store.capSilentIsMachine(this)) "MACHINE" to "silencio ${silentMs / 1000.0}s"
+                else "HUMAN" to "silencio ${silentMs / 1000.0}s"
+            }
+            if (el >= maxMs) {
+                return "HUMAN" to "habló sin palabras clave: «${heard.take(100)}»"
+            }
+            pause(200)
+        }
+        return "UNKNOWN" to "se cortó mientras escuchaba: «${heard.take(100)}»"
     }
 
     // ---------- Campaña ----------

@@ -149,9 +149,36 @@
     <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar configuración</button></div>
   </section>
 
+  <!-- Detección por subtítulos -->
+  <section class="card">
+    <h2>💬 Detección de buzón por subtítulos</h2>
+    <p class="muted">Usa los subtítulos instantáneos del celular (tienen que estar activados y en Español). Si se activa, reemplaza a la detección por audio.</p>
+    <label for="capEnabled">En la campaña y en las pruebas</label>
+    <select id="capEnabled">
+      <option value="false">Desactivada</option>
+      <option value="true">Activada (lee los subtítulos antes de poner el audio)</option>
+    </select>
+    <div class="row">
+      <div><label for="capSilentMs">Si no aparece ningún texto en (seg)</label><input id="capSilentMs" type="number" min="0.5" max="15" step="0.1"></div>
+      <div><label for="capSilentIsMachine">…considerarlo</label>
+        <select id="capSilentIsMachine">
+          <option value="true">Buzón (cortar)</option>
+          <option value="false">Persona (poner el audio)</option>
+        </select></div>
+    </div>
+    <label for="capListenMs">Leer subtítulos como máximo (seg)</label>
+    <input id="capListenMs" type="number" min="1" max="20" step="0.1">
+    <label for="capMachineWords">Palabras de buzón (separadas por coma, sin acentos)</label>
+    <textarea id="capMachineWords" style="min-height:70px"></textarea>
+    <label for="capHumanWords">Palabras de persona (separadas por coma, sin acentos)</label>
+    <textarea id="capHumanWords" style="min-height:50px"></textarea>
+    <p class="muted">Qué hacer cuando es buzón se elige en "Si atiende un buzón" (tarjeta de abajo). En el detalle de cada llamada queda el texto que leyó.</p>
+    <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar</button></div>
+  </section>
+
   <!-- Detección de buzón -->
   <section class="card">
-    <h2>🤖 Detección de buzón</h2>
+    <h2>🤖 Detección de buzón por audio</h2>
     <label for="amdEnabled">En la campaña</label>
     <select id="amdEnabled">
       <option value="false">Desactivada (el audio arranca al atender)</option>
@@ -227,9 +254,10 @@ let KEY = '';
 try { KEY = localStorage.getItem('ll_key') || ''; } catch (e) {}
 let configLoaded = false;
 // Estos se guardan en milisegundos pero en el panel se muestran en segundos.
-const MS_KEYS = ['amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs'];
+const MS_KEYS = ['amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs', 'capListenMs', 'capSilentMs'];
 const CFG_KEYS = ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist',
-  'amdEnabled', 'amdOnMachine', 'amdThresholdDb', 'amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs'];
+  'amdEnabled', 'amdOnMachine', 'amdThresholdDb', 'amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs',
+  'capEnabled', 'capListenMs', 'capSilentMs', 'capSilentIsMachine', 'capMachineWords', 'capHumanWords'];
 let timer = null;
 
 const $ = (id) => document.getElementById(id);

@@ -76,6 +76,23 @@ object Store {
     fun amdMachineMs(ctx: Context) = int(ctx, "amdMachineMs", 3000)
     fun amdMaxMs(ctx: Context) = int(ctx, "amdMaxMs", 5000)
     fun answerDelayMs(ctx: Context) = int(ctx, "answerDelayMs", 1000)
+
+    // Detección de buzón leyendo los subtítulos instantáneos (configurable desde el panel)
+    const val DEFAULT_CAP_MACHINE =
+        "mensaje,buzon,casilla,despues del tono,deje,grabe,no esta disponible,no se encuentra,fuera del area," +
+            "apagado,no puede atender,voicemail,leave a message,after the tone,not available,mailbox,record your"
+    const val DEFAULT_CAP_HUMAN = "hola,si,quien,diga,alo,bueno,buenas,buen dia,que tal,hello,hi,yes,who"
+    fun capEnabled(ctx: Context) = bool(ctx, "capEnabled", false)
+    fun capListenMs(ctx: Context) = int(ctx, "capListenMs", 5000)
+    fun capSilentMs(ctx: Context) = int(ctx, "capSilentMs", 3500)
+    fun capSilentIsMachine(ctx: Context) = bool(ctx, "capSilentIsMachine", true)
+    fun capMachineWords(ctx: Context) = splitList(str(ctx, "capMachineWords", DEFAULT_CAP_MACHINE)).map { norm(it) }
+    fun capHumanWords(ctx: Context) = splitList(str(ctx, "capHumanWords", DEFAULT_CAP_HUMAN)).map { norm(it) }
+
+    /** Minúsculas y sin acentos, para comparar texto. */
+    fun norm(s: String): String =
+        java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
     fun setIndex(ctx: Context, i: Int) = putInt(ctx, "index", i)
 
     fun splitList(s: String): List<String> =
