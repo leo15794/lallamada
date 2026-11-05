@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="acc_desc">Permite que La Llamada detecte cuándo atienden y use la función de escribir respuestas durante la llamada para decir el mensaje de la promoción.</string>
+</resources>
