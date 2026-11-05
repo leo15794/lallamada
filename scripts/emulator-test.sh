@@ -22,8 +22,17 @@ adb shell svc power stayon true
 adb shell am start -n $PKG/.MainActivity
 sleep 10
 shot 01-inicio
+adb shell input swipe 540 1700 540 500 400
+sleep 2
+shot 01b-scroll
+adb shell input swipe 540 1700 540 500 400
+sleep 2
+shot 01c-scroll
+adb shell input swipe 540 1700 540 500 400
+sleep 2
+shot 01d-scroll
 
-adb shell am start -n $PKG/.MainActivity --es auto_test_number $NUM --es auto_message "Hola, esta es una prueba de La Llamada"
+adb shell am start -n $PKG/.MainActivity --es auto_test_number $NUM --es auto_mode audio --es auto_message "Hola, esta es una prueba de La Llamada"
 sleep 12
 shot 02-marcando
 adb emu gsm list > "$OUT/gsm-list.txt" 2>&1

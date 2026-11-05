@@ -16,7 +16,7 @@
     <application
         android:allowBackup="false"
         android:label="La Llamada"
-        android:theme="@android:style/Theme.Material.Light.DarkActionBar">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"
