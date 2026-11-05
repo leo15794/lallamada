@@ -1,0 +1,8 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "resultados-emulador": false,
+      "audio-y-rediseno": false
+    }
+  }
+}
