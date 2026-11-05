@@ -47,3 +47,13 @@ Activá el **modo diagnóstico**, hacé una llamada de prueba y tocá **Exportar
 ## Compilación
 
 GitHub Actions compila la APK en cada push a `main` y la publica en Releases con la etiqueta `latest`. La clave de firma está en `signing/`, así que cada versión nueva se instala encima de la anterior.
+
+## Panel web (control remoto)
+
+La carpeta `panel/` es una web (Vercel + base de datos Neon) para manejar el celular desde una PC:
+subir clientes y audio, configurar ritmo y horario, iniciar/detener, hacer llamadas de prueba y ver resultados en vivo.
+
+En la app: tarjeta **Control remoto** → dirección del panel + contraseña → **Activar control remoto**.
+El celular consulta el panel cada 4 segundos. Tiene que estar enchufado, con Wi-Fi y con Shizuku iniciado.
+
+La contraseña está en la variable `PANEL_PASSWORD` del proyecto en Vercel (no está en este repositorio).
