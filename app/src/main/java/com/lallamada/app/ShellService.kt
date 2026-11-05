@@ -81,17 +81,13 @@ class ShellService() : IShellService.Stub() {
         audioManager()?.setParameters(keyValues)
     }
 
-    /**
-     * Prueba de captura del audio que llega del otro lado (para detectar contestadores).
-     * No graba nada: calcula el volumen cada 250 ms y lo devuelve como texto.
-     */
-    override fun captureLevels(seconds: Int): String {
-        val rate = 16000
+    private var lastOpenError = ""
+
+    /** Abre la captura del audio que llega de la llamada (lo que dice el otro). */
+    private fun openDownlink(rate: Int): AudioRecord? {
         val shellCtx = try { context?.createPackageContext("com.android.shell", 0) } catch (e: Throwable) { null }
-        val sources = listOf(3 to "VOICE_DOWNLINK", 4 to "VOICE_CALL")
         val errors = StringBuilder()
-        for ((src, name) in sources) {
-            var rec: AudioRecord? = null
+        for ((src, name) in listOf(3 to "VOICE_DOWNLINK", 4 to "VOICE_CALL")) {
             try {
                 val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 val b = AudioRecord.Builder()
@@ -105,52 +101,120 @@ class ShellService() : IShellService.Stub() {
                     )
                     .setBufferSizeInBytes(maxOf(minBuf, rate))
                 if (shellCtx != null && Build.VERSION.SDK_INT >= 31) b.setContext(shellCtx)
-                rec = b.build()
-                if (rec.state != AudioRecord.STATE_INITIALIZED) {
-                    errors.append(name).append(": no inicializa; ")
-                    continue
+                val rec = b.build()
+                if (rec.state == AudioRecord.STATE_INITIALIZED) {
+                    lastOpenError = name
+                    return rec
                 }
-                rec.startRecording()
-                val frame = rate / 4
-                val buf = ShortArray(frame)
-                val levels = ArrayList<Double>()
-                val end = System.currentTimeMillis() + seconds * 1000L
-                while (System.currentTimeMillis() < end) {
-                    var got = 0
-                    while (got < frame) {
-                        val n = rec.read(buf, got, frame - got)
-                        if (n <= 0) break
-                        got += n
-                    }
-                    if (got <= 0) break
-                    var sum = 0.0
-                    for (i in 0 until got) {
-                        val v = buf[i] / 32768.0
-                        sum += v * v
-                    }
-                    val rms = Math.sqrt(sum / got)
-                    levels.add(if (rms > 0) 20 * Math.log10(rms) else -100.0)
-                }
-                if (levels.isEmpty()) {
-                    errors.append(name).append(": sin datos; ")
-                    continue
-                }
-                val max = levels.maxOrNull() ?: -100.0
-                val avg = levels.average()
-                val voice = levels.count { it > -45 } * 100 / levels.size
-                val chars = " .:-=+*#"
-                val spark = levels.joinToString("") { l ->
-                    chars[((l + 70) / 50 * 7).toInt().coerceIn(0, 7)].toString()
-                }
-                return "OK fuente=$name máx=${max.toInt()}dB prom=${avg.toInt()}dB voz=$voice% [$spark]"
+                rec.release()
+                errors.append(name).append(": no inicializa; ")
             } catch (e: Throwable) {
                 errors.append(name).append(": ").append(cause(e)).append("; ")
-            } finally {
-                try { rec?.stop() } catch (_: Throwable) {}
-                try { rec?.release() } catch (_: Throwable) {}
             }
         }
-        return "FALLÓ: $errors"
+        lastOpenError = errors.toString()
+        return null
+    }
+
+    private fun frameDb(rec: AudioRecord, buf: ShortArray): Double? {
+        var got = 0
+        while (got < buf.size) {
+            val n = rec.read(buf, got, buf.size - got)
+            if (n <= 0) break
+            got += n
+        }
+        if (got <= 0) return null
+        var sum = 0.0
+        for (i in 0 until got) {
+            val v = buf[i] / 32768.0
+            sum += v * v
+        }
+        val rms = Math.sqrt(sum / got)
+        return if (rms > 0) 20 * Math.log10(rms) else -100.0
+    }
+
+    private fun sparkChar(db: Double): Char {
+        val chars = " .:-=+*#"
+        return chars[((db + 70) / 50 * 7).toInt().coerceIn(0, 7)]
+    }
+
+    /** Prueba: volumen de lo que llega de la llamada cada 250 ms durante unos segundos. No graba nada. */
+    override fun captureLevels(seconds: Int): String {
+        val rate = 16000
+        val rec = openDownlink(rate) ?: return "FALLÓ: $lastOpenError"
+        val source = lastOpenError
+        try {
+            rec.startRecording()
+            val buf = ShortArray(rate / 4)
+            val levels = ArrayList<Double>()
+            val end = System.currentTimeMillis() + seconds * 1000L
+            while (System.currentTimeMillis() < end) levels.add(frameDb(rec, buf) ?: break)
+            if (levels.isEmpty()) return "FALLÓ: sin datos"
+            val voice = levels.count { it > -45 } * 100 / levels.size
+            val spark = levels.joinToString("") { sparkChar(it).toString() }
+            return "OK fuente=$source máx=${(levels.maxOrNull() ?: -100.0).toInt()}dB " +
+                "prom=${levels.average().toInt()}dB voz=$voice% [$spark]"
+        } catch (e: Throwable) {
+            return "FALLÓ: ${cause(e)}"
+        } finally {
+            try { rec.stop() } catch (_: Throwable) {}
+            try { rec.release() } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * Detección de contestador escuchando al que atendió (cuadros de 50 ms):
+     *  - habló y después hizo silencio (silenceEndMs) antes de llegar a machineMs → persona
+     *  - no dijo nada durante initialSilenceMs → persona callada
+     *  - acumuló machineMs de voz → contestador
+     */
+    override fun detect(thresholdDb: Int, initialSilenceMs: Int, silenceEndMs: Int, machineMs: Int, maxMs: Int): String {
+        val rate = 16000
+        val frameMs = 50
+        val rec = openDownlink(rate) ?: return "FAIL|no pude escuchar la llamada: $lastOpenError"
+        try {
+            rec.startRecording()
+            val buf = ShortArray(rate * frameMs / 1000)
+            var elapsed = 0
+            var speechMs = 0
+            var silenceMs = 0
+            var heard = false
+            var maxDb = -100.0
+            var verdict = ""
+            var why = ""
+            val spark = StringBuilder()
+            var pair = -100.0
+            while (elapsed < maxMs) {
+                val db = frameDb(rec, buf) ?: break
+                elapsed += frameMs
+                maxDb = maxOf(maxDb, db)
+                pair = maxOf(pair, db)
+                if (elapsed % 100 == 0) {
+                    spark.append(sparkChar(pair))
+                    pair = -100.0
+                }
+                if (db > thresholdDb) {
+                    speechMs += frameMs
+                    silenceMs = 0
+                    heard = true
+                } else {
+                    silenceMs += frameMs
+                }
+                if (speechMs >= machineMs) { verdict = "MACHINE"; why = "habló de corrido"; break }
+                if (!heard && silenceMs >= initialSilenceMs) { verdict = "HUMAN"; why = "atendió en silencio"; break }
+                if (heard && silenceMs >= silenceEndMs) { verdict = "HUMAN"; why = "saludó y esperó"; break }
+            }
+            if (verdict.isEmpty()) {
+                if (speechMs >= machineMs * 2 / 3) { verdict = "MACHINE"; why = "tiempo máximo, mucha voz" }
+                else { verdict = "HUMAN"; why = "tiempo máximo" }
+            }
+            return "$verdict|$why en ${elapsed}ms, voz ${speechMs}ms, máx ${maxDb.toInt()}dB [$spark]"
+        } catch (e: Throwable) {
+            return "FAIL|${cause(e)}"
+        } finally {
+            try { rec.stop() } catch (_: Throwable) {}
+            try { rec.release() } catch (_: Throwable) {}
+        }
     }
 
     override fun stopPlay() {

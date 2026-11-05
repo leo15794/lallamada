@@ -66,6 +66,16 @@ object Store {
     fun kwHangup(ctx: Context) = splitList(str(ctx, "kwHangup", DEFAULT_HANGUP))
     fun diagnostic(ctx: Context) = bool(ctx, "diag", true)
     fun index(ctx: Context) = int(ctx, "index", 0)
+
+    // Detección de contestador (configurable desde el panel)
+    fun amdEnabled(ctx: Context) = bool(ctx, "amdEnabled", false)
+    fun amdOnMachine(ctx: Context) = str(ctx, "amdOnMachine", "cortar")
+    fun amdThresholdDb(ctx: Context) = int(ctx, "amdThresholdDb", -45)
+    fun amdInitialSilenceMs(ctx: Context) = int(ctx, "amdInitialSilenceMs", 1500)
+    fun amdSilenceEndMs(ctx: Context) = int(ctx, "amdSilenceEndMs", 700)
+    fun amdMachineMs(ctx: Context) = int(ctx, "amdMachineMs", 3000)
+    fun amdMaxMs(ctx: Context) = int(ctx, "amdMaxMs", 5000)
+    fun answerDelayMs(ctx: Context) = int(ctx, "answerDelayMs", 1000)
     fun setIndex(ctx: Context, i: Int) = putInt(ctx, "index", i)
 
     fun splitList(s: String): List<String> =

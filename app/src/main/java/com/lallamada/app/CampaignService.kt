@@ -273,23 +273,45 @@ class CampaignService : Service() {
         Live.status = "Atendió: $who"
         diag("atendió ${c.phone}")
 
-        // Prueba de captura (solo en llamadas de prueba): escuchar 4 s lo que dice el otro lado.
+        // Detección de contestador: siempre en las pruebas (para ver el análisis), y en la campaña si está activada.
         var capture = ""
-        if (captureTest) {
+        val useAmd = Store.mode(this) == Store.MODE_AUDIO && (captureTest || Store.amdEnabled(this))
+        if (useAmd) {
             val shell = ShellBridge.service
-            capture = if (shell == null) {
-                "captura: sin Shizuku"
+            if (shell == null) {
+                capture = "detección: sin Shizuku"
+                pause(Store.answerDelayMs(this).toLong())
             } else {
-                Live.status = "Escuchando 4 s: decí \"Hola\" en el otro teléfono"
-                "captura: " + try { shell.captureLevels(4) } catch (e: Exception) { "FALLÓ: ${e.message}" }
-            }
-            diag(capture)
-            if (!inCall()) {
-                Live.inCall = false
-                return "atendió" to "$capture | cortó durante la escucha"
+                Live.status = "Escuchando quién atendió..."
+                val r = try {
+                    shell.detect(
+                        Store.amdThresholdDb(this), Store.amdInitialSilenceMs(this), Store.amdSilenceEndMs(this),
+                        Store.amdMachineMs(this), Store.amdMaxMs(this)
+                    )
+                } catch (e: Exception) {
+                    "FAIL|${e.message}"
+                }
+                val kind = r.substringBefore('|')
+                val info = r.substringAfter('|')
+                capture = when (kind) {
+                    "MACHINE" -> "BUZÓN ($info)"
+                    "HUMAN" -> "persona ($info)"
+                    else -> "detección falló: $info"
+                }
+                diag("detección ${c.phone}: $r")
+                if (!inCall()) {
+                    Live.inCall = false
+                    return "atendió" to "$capture | cortó durante la escucha"
+                }
+                if (kind == "MACHINE" && Store.amdOnMachine(this) == "cortar") {
+                    hangUp()
+                    waitUntil(8000) { !inCall() }
+                    Live.inCall = false
+                    return "buzón" to capture
+                }
             }
         } else {
-            pause(1500)
+            pause(Store.answerDelayMs(this).toLong())
         }
 
         var detail: String

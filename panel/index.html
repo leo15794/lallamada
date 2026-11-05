@@ -147,6 +147,36 @@
     <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar configuración</button></div>
   </section>
 
+  <!-- Detección de buzón -->
+  <section class="card">
+    <h2>🤖 Detección de buzón</h2>
+    <label for="amdEnabled">En la campaña</label>
+    <select id="amdEnabled">
+      <option value="false">Desactivada (el audio arranca al atender)</option>
+      <option value="true">Activada (escucha primero quién atendió)</option>
+    </select>
+    <label for="amdOnMachine">Si atiende un buzón</label>
+    <select id="amdOnMachine">
+      <option value="cortar">Cortar y marcar como "buzón"</option>
+      <option value="dejar">Dejar el mensaje igual</option>
+    </select>
+    <div class="row">
+      <div><label for="amdSilenceEndMs">Silencio después del "Hola" (ms)</label><input id="amdSilenceEndMs" type="number" min="200" max="5000" step="100"></div>
+      <div><label for="amdInitialSilenceMs">Si no dicen nada, arrancar a los (ms)</label><input id="amdInitialSilenceMs" type="number" min="300" max="10000" step="100"></div>
+    </div>
+    <div class="row">
+      <div><label for="amdMachineMs">Voz de corrido = buzón desde (ms)</label><input id="amdMachineMs" type="number" min="500" max="15000" step="100"></div>
+      <div><label for="amdMaxMs">Escuchar como máximo (ms)</label><input id="amdMaxMs" type="number" min="1000" max="20000" step="100"></div>
+    </div>
+    <div class="row">
+      <div><label for="amdThresholdDb">Sensibilidad: voz desde (dB)</label><input id="amdThresholdDb" type="number" min="-80" max="-5"></div>
+      <div><label for="answerDelayMs">Sin detección: esperar antes del audio (ms)</label><input id="answerDelayMs" type="number" min="0" max="10000" step="100"></div>
+    </div>
+    <p class="muted">1000 ms = 1 segundo. Las llamadas de prueba siempre hacen la detección y muestran el análisis en el detalle.
+      Si toma ruido como voz, bajá la sensibilidad (ej. de -45 a -38). Si no detecta el "Hola", subila (ej. -50).</p>
+    <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar</button></div>
+  </section>
+
   <!-- Prueba -->
   <section class="card">
     <h2>🧪 Llamada de prueba</h2>
@@ -179,6 +209,8 @@
 let KEY = '';
 try { KEY = localStorage.getItem('ll_key') || ''; } catch (e) {}
 let configLoaded = false;
+const CFG_KEYS = ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist',
+  'amdEnabled', 'amdOnMachine', 'amdThresholdDb', 'amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs'];
 let timer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -251,7 +283,7 @@ async function refresh() {
 
   if (!configLoaded) {
     const c = s.config;
-    for (const k of ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist']) $(k).value = c[k] ?? '';
+    for (const k of CFG_KEYS) $(k).value = String(c[k] ?? '');
     configLoaded = true;
   }
 
@@ -259,10 +291,10 @@ async function refresh() {
   const totalR = s.stats.reduce((a, x) => a + x.n, 0);
   $('stats').innerHTML = [
     ['Total', totalR], ['Atendieron', st['atendió'] || 0], ['No atendieron', st['no atendió'] || 0],
-    ['Omitidos', st['omitido'] || 0], ['Errores', st['error'] || 0],
+    ['Buzón', st['buzón'] || 0], ['Omitidos', st['omitido'] || 0], ['Errores', st['error'] || 0],
   ].map(([k, v]) => `<div class="stat"><span class="muted">${k}</span><b>${v}</b></div>`).join('');
   $('results').innerHTML = s.results.map((r) => {
-    const cls = r.result === 'atendió' ? 'res-atendió' : r.result === 'omitido' ? 'res-omitido' : 'res-no';
+    const cls = r.result === 'atendió' ? 'res-atendió' : (r.result === 'omitido' || r.result === 'buzón') ? 'res-omitido' : 'res-no';
     return `<tr><td>${esc(r.ts)}</td><td>${esc(r.phone)}</td><td>${esc(r.name)}</td><td class="${cls}">${esc(r.result)}</td><td class="detail">${esc(r.detail)}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="muted">Todavía no hay llamadas</td></tr>';
 }
@@ -289,7 +321,7 @@ function testCall() {
 
 async function saveConfig(silent) {
   const body = {};
-  for (const k of ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist']) body[k] = $(k).value;
+  for (const k of CFG_KEYS) body[k] = $(k).value;
   try {
     await api('/api/config', { method: 'POST', body: JSON.stringify(body) });
     if (!silent) toast('Configuración guardada');

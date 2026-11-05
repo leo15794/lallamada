@@ -10,6 +10,14 @@ export const DEFAULT_CONFIG = {
   audioMethod: 'mtk',
   testNumber: '',
   blocklist: '',
+  amdEnabled: false,
+  amdOnMachine: 'cortar',
+  amdThresholdDb: -45,
+  amdInitialSilenceMs: 1500,
+  amdSilenceEndMs: 700,
+  amdMachineMs: 3000,
+  amdMaxMs: 5000,
+  answerDelayMs: 1000,
 };
 
 /** Verifica la contraseña (cabecera x-key). Responde 401 si no coincide. */

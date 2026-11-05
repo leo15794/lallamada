@@ -18,4 +18,7 @@ interface IShellService {
 
     // Escucha el audio que llega de la llamada durante unos segundos y devuelve un resumen de niveles.
     String captureLevels(int seconds) = 5;
+
+    // Detección de contestador: escucha al que atendió y devuelve "HUMAN|..." , "MACHINE|..." o "FAIL|...".
+    String detect(int thresholdDb, int initialSilenceMs, int silenceEndMs, int machineMs, int maxMs) = 6;
 }
