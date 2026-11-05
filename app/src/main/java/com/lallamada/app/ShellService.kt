@@ -83,11 +83,35 @@ class ShellService() : IShellService.Stub() {
 
     private var lastOpenError = ""
 
-    /** Abre la captura del audio que llega de la llamada (lo que dice el otro). */
-    private fun openDownlink(rate: Int): AudioRecord? {
+    private class Capture(val rec: AudioRecord, val label: String, val rate: Int)
+
+    private fun readCode(n: Int): String = when (n) {
+        AudioRecord.ERROR_INVALID_OPERATION -> "INVALID_OPERATION"
+        AudioRecord.ERROR_BAD_VALUE -> "BAD_VALUE"
+        AudioRecord.ERROR_DEAD_OBJECT -> "DEAD_OBJECT"
+        AudioRecord.ERROR -> "ERROR"
+        else -> n.toString()
+    }
+
+    /**
+     * Abre la captura del audio que llega de la llamada probando varias combinaciones
+     * (fuente, identidad shell, frecuencia) y devuelve la primera que realmente entrega audio.
+     */
+    private fun openDownlink(): Capture? {
         val shellCtx = try { context?.createPackageContext("com.android.shell", 0) } catch (e: Throwable) { null }
         val errors = StringBuilder()
-        for ((src, name) in listOf(3 to "VOICE_DOWNLINK", 4 to "VOICE_CALL")) {
+        val combos = ArrayList<Triple<Pair<Int, String>, Boolean, Int>>()
+        for (src in listOf(3 to "DOWNLINK", 4 to "VOICE_CALL")) {
+            for (rate in listOf(16000, 8000)) {
+                combos.add(Triple(src, true, rate))
+                combos.add(Triple(src, false, rate))
+            }
+        }
+        for ((srcPair, useCtx, rate) in combos) {
+            val (src, name) = srcPair
+            if (useCtx && (shellCtx == null || Build.VERSION.SDK_INT < 31)) continue
+            val label = "$name/${rate / 1000}k" + if (useCtx) "/shell" else ""
+            var rec: AudioRecord? = null
             try {
                 val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 val b = AudioRecord.Builder()
@@ -100,16 +124,32 @@ class ShellService() : IShellService.Stub() {
                             .build()
                     )
                     .setBufferSizeInBytes(maxOf(minBuf, rate))
-                if (shellCtx != null && Build.VERSION.SDK_INT >= 31) b.setContext(shellCtx)
-                val rec = b.build()
-                if (rec.state == AudioRecord.STATE_INITIALIZED) {
-                    lastOpenError = name
-                    return rec
+                if (useCtx && shellCtx != null) b.setContext(shellCtx)
+                rec = b.build()
+                if (rec.state != AudioRecord.STATE_INITIALIZED) {
+                    errors.append(label).append(": no inicializa; ")
+                    rec.release(); rec = null
+                    continue
                 }
-                rec.release()
-                errors.append(name).append(": no inicializa; ")
+                rec.startRecording()
+                if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                    errors.append(label).append(": no arranca; ")
+                    rec.release(); rec = null
+                    continue
+                }
+                val probe = ShortArray(rate / 50) // 20 ms
+                val n = rec.read(probe, 0, probe.size)
+                if (n <= 0) {
+                    errors.append(label).append(": read=").append(readCode(n)).append("; ")
+                    try { rec.stop() } catch (_: Throwable) {}
+                    rec.release(); rec = null
+                    continue
+                }
+                lastOpenError = ""
+                return Capture(rec, label, rate)
             } catch (e: Throwable) {
-                errors.append(name).append(": ").append(cause(e)).append("; ")
+                errors.append(label).append(": ").append(cause(e)).append("; ")
+                try { rec?.release() } catch (_: Throwable) {}
             }
         }
         lastOpenError = errors.toString()
@@ -140,19 +180,17 @@ class ShellService() : IShellService.Stub() {
 
     /** Prueba: volumen de lo que llega de la llamada cada 250 ms durante unos segundos. No graba nada. */
     override fun captureLevels(seconds: Int): String {
-        val rate = 16000
-        val rec = openDownlink(rate) ?: return "FALLÓ: $lastOpenError"
-        val source = lastOpenError
+        val cap = openDownlink() ?: return "FALLÓ: $lastOpenError"
+        val rec = cap.rec
         try {
-            rec.startRecording()
-            val buf = ShortArray(rate / 4)
+            val buf = ShortArray(cap.rate / 4)
             val levels = ArrayList<Double>()
             val end = System.currentTimeMillis() + seconds * 1000L
             while (System.currentTimeMillis() < end) levels.add(frameDb(rec, buf) ?: break)
-            if (levels.isEmpty()) return "FALLÓ: sin datos"
+            if (levels.isEmpty()) return "FALLÓ: ${cap.label} dejó de entregar audio"
             val voice = levels.count { it > -45 } * 100 / levels.size
             val spark = levels.joinToString("") { sparkChar(it).toString() }
-            return "OK fuente=$source máx=${(levels.maxOrNull() ?: -100.0).toInt()}dB " +
+            return "OK fuente=${cap.label} máx=${(levels.maxOrNull() ?: -100.0).toInt()}dB " +
                 "prom=${levels.average().toInt()}dB voz=$voice% [$spark]"
         } catch (e: Throwable) {
             return "FALLÓ: ${cause(e)}"
@@ -169,12 +207,11 @@ class ShellService() : IShellService.Stub() {
      *  - acumuló machineMs de voz → contestador
      */
     override fun detect(thresholdDb: Int, initialSilenceMs: Int, silenceEndMs: Int, machineMs: Int, maxMs: Int): String {
-        val rate = 16000
         val frameMs = 50
-        val rec = openDownlink(rate) ?: return "FAIL|no pude escuchar la llamada: $lastOpenError"
+        val cap = openDownlink() ?: return "FAIL|no pude escuchar la llamada: $lastOpenError"
+        val rec = cap.rec
         try {
-            rec.startRecording()
-            val buf = ShortArray(rate * frameMs / 1000)
+            val buf = ShortArray(cap.rate * frameMs / 1000)
             var elapsed = 0
             var speechMs = 0
             var silenceMs = 0
@@ -204,11 +241,12 @@ class ShellService() : IShellService.Stub() {
                 if (!heard && silenceMs >= initialSilenceMs) { verdict = "HUMAN"; why = "atendió en silencio"; break }
                 if (heard && silenceMs >= silenceEndMs) { verdict = "HUMAN"; why = "saludó y esperó"; break }
             }
+            if (elapsed == 0) return "FAIL|${cap.label} dejó de entregar audio"
             if (verdict.isEmpty()) {
                 if (speechMs >= machineMs * 2 / 3) { verdict = "MACHINE"; why = "tiempo máximo, mucha voz" }
                 else { verdict = "HUMAN"; why = "tiempo máximo" }
             }
-            return "$verdict|$why en ${elapsed}ms, voz ${speechMs}ms, máx ${maxDb.toInt()}dB [$spark]"
+            return "$verdict|$why en ${elapsed}ms, voz ${speechMs}ms, máx ${maxDb.toInt()}dB, ${cap.label} [$spark]"
         } catch (e: Throwable) {
             return "FAIL|${cause(e)}"
         } finally {
