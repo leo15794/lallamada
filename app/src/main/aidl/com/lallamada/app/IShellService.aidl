@@ -12,4 +12,7 @@ interface IShellService {
 
     // Corta la reproducción en curso.
     void stopPlay() = 3;
+
+    // Parámetros internos del sistema de audio (por ejemplo los de MediaTek).
+    void setParams(String keyValues) = 4;
 }

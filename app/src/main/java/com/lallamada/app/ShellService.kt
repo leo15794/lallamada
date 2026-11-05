@@ -75,6 +75,10 @@ class ShellService() : IShellService.Stub() {
         return sb.toString()
     }
 
+    override fun setParams(keyValues: String) {
+        audioManager()?.setParameters(keyValues)
+    }
+
     override fun stopPlay() {
         stop = true
     }

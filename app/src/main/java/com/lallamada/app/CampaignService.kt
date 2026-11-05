@@ -201,11 +201,13 @@ class CampaignService : Service() {
         val mode = Store.mode(this)
         if (mode == Store.MODE_AUDIO) {
             Live.status = "Reproduciendo el audio a $who"
-            detail = if (Store.audioMethod(this) == Store.METHOD_DIRECT) {
-                val r = playDirect()
-                if (r.startsWith("FALLÓ")) "$r → uso altavoz: " + playAudioInCall() else r
-            } else {
-                playAudioInCall()
+            detail = when (Store.audioMethod(this)) {
+                Store.METHOD_DIRECT -> {
+                    val r = playDirect()
+                    if (r.startsWith("FALLÓ")) "$r → uso altavoz: " + playAudioInCall() else r
+                }
+                Store.METHOD_MTK -> playMtk()
+                else -> playAudioInCall()
             }
             diag("después del audio a ${c.phone}: $detail")
             talkMs = 1500L
@@ -235,6 +237,66 @@ class CampaignService : Service() {
      * Android no deja meter audio dentro de una llamada. Vuelta: activar el altavoz de la llamada
      * y reproducir el audio por el parlante para que lo capte el micrófono.
      */
+    // Parámetros del sistema de audio de MediaTek: el reproductor de "sonido de fondo" (BGS)
+    // del módem tiene la salida hacia la llamada en volumen cero; esto la abre.
+    private val mtkOn = listOf(
+        "Set_BGS_UL_Mute=0", "Set_BGS_DL_Mute=1",
+        "Set_SpeechCall_UL_Mute=1", "Set_SpeechCall_DL_Mute=1"
+    )
+    private val mtkOff = listOf(
+        "Set_SpeechCall_UL_Mute=0", "Set_SpeechCall_DL_Mute=0",
+        "Set_BGS_UL_Mute=1", "Set_BGS_DL_Mute=0"
+    )
+
+    private fun setAudioParams(list: List<String>) {
+        val am = getSystemService(AudioManager::class.java)
+        for (kv in list) {
+            try { am.setParameters(kv) } catch (_: Exception) {}
+            try { ShellBridge.service?.setParams(kv) } catch (_: Exception) {}
+        }
+    }
+
+    /** Método MediaTek: abre el canal de sonido de fondo hacia la llamada y reproduce el audio. */
+    private fun playMtk(): String {
+        val f = Store.audioFile(this)
+        if (!f.exists()) return "No hay audio cargado"
+        val am = getSystemService(AudioManager::class.java)
+        val streams = listOf(AudioManager.STREAM_VOICE_CALL, AudioManager.STREAM_MUSIC)
+        val oldVols = streams.associateWith { am.getStreamVolume(it) }
+        for (s in streams) {
+            try { am.setStreamVolume(s, am.getStreamMaxVolume(s), 0) } catch (_: Exception) {}
+        }
+        val mp = MediaPlayer()
+        try {
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            mp.setDataSource(f.absolutePath)
+            mp.prepare()
+            setAudioParams(mtkOn)
+            pause(150)
+            mp.start()
+            val dur = mp.duration.toLong().coerceAtLeast(1000L)
+            waitUntil(dur + 500L) { !inCall() }
+            return "MediaTek: audio reproducido (${dur / 1000} s)" +
+                if (ShellBridge.service != null) " (con Shizuku)" else " (sin Shizuku)"
+        } catch (e: InterruptedException) {
+            throw e
+        } catch (e: Exception) {
+            return "MediaTek: error de audio: ${e.message}"
+        } finally {
+            try { mp.stop() } catch (_: Exception) {}
+            mp.release()
+            setAudioParams(mtkOff)
+            for ((s, v) in oldVols) {
+                try { am.setStreamVolume(s, v, 0) } catch (_: Exception) {}
+            }
+        }
+    }
+
     /** Audio directo a la llamada usando Shizuku (sin altavoz). */
     private fun playDirect(): String {
         val shell = ShellBridge.service ?: return "FALLÓ: Shizuku no está conectado"

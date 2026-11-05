@@ -100,6 +100,7 @@ class MainActivity : Activity() {
     private lateinit var btnShizukuOpen: Button
     private lateinit var btnShizukuPerm: Button
     private lateinit var checkResult: TextView
+    private lateinit var mtkNote: TextView
 
     // Clientes
     private lateinit var clientsInfo: TextView
@@ -265,7 +266,7 @@ class MainActivity : Activity() {
             background = rounded(C_FIELD, 12, C_BORDER)
             setPadding(px(4), px(4), px(4), px(4))
         }
-        listOf(Store.METHOD_DIRECT to "Directo (Shizuku)", Store.METHOD_SPEAKER to "Altavoz").forEachIndexed { i, (key, label) ->
+        listOf(Store.METHOD_MTK to "MediaTek", Store.METHOD_DIRECT to "Directo", Store.METHOD_SPEAKER to "Altavoz").forEachIndexed { i, (key, label) ->
             val t = tv(label, 14f, C_TEXT, bold = true).apply {
                 gravity = Gravity.CENTER
                 setPadding(0, px(9), 0, px(9))
@@ -277,6 +278,13 @@ class MainActivity : Activity() {
         audioPanel.addView(methodTabs, lp(top = 4))
 
         directPanel = vbox()
+        mtkNote = tv(
+            "Para celulares con procesador MediaTek (como el Galaxy A05): abre el canal interno de " +
+                "'sonido de fondo' del módem hacia la llamada. Mientras suena el audio se silencia el micrófono. " +
+                "Funciona mejor con Shizuku conectado, pero se puede probar sin él.",
+            12f, C_PRIMARY_DARK
+        )
+        directPanel.addView(mtkNote, lp(top = 8))
         directPanel.addView(
             tv(
                 "El audio entra limpio a la llamada, sin altavoz. Necesita la app Shizuku " +
@@ -561,9 +569,10 @@ class MainActivity : Activity() {
             t.background = if (sel) rounded(C_PRIMARY, 9) else null
             t.setTextColor(if (sel) Color.WHITE else C_MUTED)
         }
-        directPanel.visibility = if (m == Store.METHOD_DIRECT) View.VISIBLE else View.GONE
+        directPanel.visibility = if (m == Store.METHOD_DIRECT || m == Store.METHOD_MTK) View.VISIBLE else View.GONE
+        mtkNote.visibility = if (m == Store.METHOD_MTK) View.VISIBLE else View.GONE
         speakerPanel.visibility = if (m == Store.METHOD_SPEAKER) View.VISIBLE else View.GONE
-        if (m == Store.METHOD_DIRECT) ShellBridge.bind()
+        if (m != Store.METHOD_SPEAKER) ShellBridge.bind()
     }
 
     private fun shizukuInstalled(): Boolean = try {
@@ -589,7 +598,7 @@ class MainActivity : Activity() {
     }
 
     private fun refreshShizuku() {
-        if (audioMethod != Store.METHOD_DIRECT) return
+        if (audioMethod == Store.METHOD_SPEAKER) return
         ShellBridge.bind()
         val installed = shizukuInstalled()
         val connected = ShellBridge.service != null
@@ -710,8 +719,12 @@ class MainActivity : Activity() {
                     else -> C_RED
                 }
                 val line = tv("$time  ·  $who  ·  $res", 13f, color)
-                line.setPadding(0, px(3), 0, px(3))
+                line.setPadding(0, px(4), 0, 0)
                 lastResults.addView(line)
+                val detail = r.getOrElse(4) { "" }
+                if (detail.isNotEmpty()) {
+                    lastResults.addView(tv(detail, 12f, C_MUTED).apply { setPadding(0, 0, 0, px(4)) })
+                }
             }
         }
     }

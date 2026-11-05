@@ -53,6 +53,7 @@ object Store {
     fun audioOut(ctx: Context) = str(ctx, "audioOut", OUT_MEDIA)
     const val METHOD_DIRECT = "directo"
     const val METHOD_SPEAKER = "altavoz"
+    const val METHOD_MTK = "mtk"
     fun audioMethod(ctx: Context) = str(ctx, "audioMethod", METHOD_SPEAKER)
     fun ringTimeout(ctx: Context) = int(ctx, "ring", 35)
     fun pauseSec(ctx: Context) = int(ctx, "pause", 20)
