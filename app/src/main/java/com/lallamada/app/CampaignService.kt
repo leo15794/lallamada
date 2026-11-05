@@ -280,7 +280,15 @@ class CampaignService : Service() {
             pause(150)
             mp.start()
             val dur = mp.duration.toLong().coerceAtLeast(1000L)
-            waitUntil(dur + 500L) { !inCall() }
+            // El reproductor de fondo del módem se abre con el canal hacia la llamada cerrado:
+            // repetimos la orden justo después de arrancar y cada tanto mientras suena.
+            val end = System.currentTimeMillis() + dur + 500L
+            var k = 0
+            while (System.currentTimeMillis() < end && inCall()) {
+                if (k < 5 || k % 5 == 0) setAudioParams(mtkOn)
+                pause(200)
+                k++
+            }
             return "MediaTek: audio reproducido (${dur / 1000} s)" +
                 if (ShellBridge.service != null) " (con Shizuku)" else " (sin Shizuku)"
         } catch (e: InterruptedException) {
