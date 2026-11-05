@@ -220,6 +220,19 @@
     <div class="row" style="align-items:center;margin-bottom:8px">
       <h2 style="margin:0;flex:3 1 200px">📋 Lista de llamadas</h2>
       <input id="listSearch" placeholder="Buscar nombre o teléfono" oninput="renderList()" style="flex:2 1 200px">
+      <select id="listFilter" onchange="renderList()" style="flex:1 1 140px">
+        <option value="pend">Ver pendientes</option>
+        <option value="done">Ver ya llamados</option>
+        <option value="all">Ver todos</option>
+      </select>
+    </div>
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <select id="pruneMode" style="flex:2 1 240px">
+        <option value="all">Todos los ya llamados (cualquier resultado)</option>
+        <option value="answered">Solo los que atendieron</option>
+        <option value="answered_vm">Los que atendieron o fueron buzón</option>
+      </select>
+      <button class="outline" onclick="pruneList()" style="flex:1 1 160px">Quitar de la lista</button>
     </div>
     <div class="muted" id="listSummary"></div>
     <div class="tablewrap" style="max-height:440px;overflow-y:auto;margin-top:8px">
@@ -365,7 +378,9 @@ function renderList() {
   $('listSummary').textContent = LIST.length
     ? `${LIST.length} clientes · ${called} con resultado · ${LIST.length - called} pendientes`
     : 'Todavía no subiste una lista';
-  const rows = LIST.filter((c) => !q || (c.name || '').toLowerCase().replace(/\s/g, '').includes(q) || c.phone.includes(q));
+  const f = $('listFilter').value;
+  const rows = LIST.filter((c) => (f === 'all' || (f === 'pend' ? !c.result : !!c.result)) &&
+    (!q || (c.name || '').toLowerCase().replace(/\s/g, '').includes(q) || c.phone.includes(q)));
   $('list').innerHTML = rows.slice(0, 2000).map((c) => {
     let st, cls;
     if (c.pos === deviceIndex && !c.result) { st = '▶ próximo'; cls = 'res-next'; }
@@ -376,6 +391,17 @@ function renderList() {
     const title = c.detail ? ` title="${esc(c.ts + ' · ' + c.detail)}"` : '';
     return `<tr><td>${c.pos + 1}</td><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td class="${cls}"${title}>${esc(st)}</td></tr>`;
   }).join('') || '<tr><td colspan="4" class="muted">Sin resultados</td></tr>';
+}
+
+async function pruneList() {
+  const sel = $('pruneMode');
+  const label = sel.options[sel.selectedIndex].text.toLowerCase();
+  if (!confirm(`¿Quitar de la lista: ${label}?\nLos resultados no se borran. El celular recibe la lista nueva cuando no esté llamando.`)) return;
+  try {
+    const r = await (await api('/api/prune', { method: 'POST', body: JSON.stringify({ mode: sel.value }) })).json();
+    toast(r.removed ? `Quitados ${r.removed}. Quedan ${r.remaining} en la lista.` : 'No había nadie para quitar');
+    loadList(); refresh();
+  } catch (e) { toast(e.message); }
 }
 
 function fmtAge(sec) {
