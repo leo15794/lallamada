@@ -163,18 +163,18 @@
       <option value="dejar">Dejar el mensaje igual</option>
     </select>
     <div class="row">
-      <div><label for="amdSilenceEndMs">Silencio después del "Hola" (ms)</label><input id="amdSilenceEndMs" type="number" min="200" max="5000" step="100"></div>
-      <div><label for="amdInitialSilenceMs">Si no dicen nada, arrancar a los (ms)</label><input id="amdInitialSilenceMs" type="number" min="300" max="10000" step="100"></div>
+      <div><label for="amdSilenceEndMs">Silencio después del "Hola" (seg)</label><input id="amdSilenceEndMs" type="number" min="0.2" max="5" step="0.1"></div>
+      <div><label for="amdInitialSilenceMs">Si no dicen nada, arrancar a los (seg)</label><input id="amdInitialSilenceMs" type="number" min="0.3" max="10" step="0.1"></div>
     </div>
     <div class="row">
-      <div><label for="amdMachineMs">Voz de corrido = buzón desde (ms)</label><input id="amdMachineMs" type="number" min="500" max="15000" step="100"></div>
-      <div><label for="amdMaxMs">Escuchar como máximo (ms)</label><input id="amdMaxMs" type="number" min="1000" max="20000" step="100"></div>
+      <div><label for="amdMachineMs">Voz de corrido = buzón desde (seg)</label><input id="amdMachineMs" type="number" min="0.5" max="15" step="0.1"></div>
+      <div><label for="amdMaxMs">Escuchar como máximo (seg)</label><input id="amdMaxMs" type="number" min="1" max="20" step="0.1"></div>
     </div>
     <div class="row">
       <div><label for="amdThresholdDb">Sensibilidad: voz desde (dB)</label><input id="amdThresholdDb" type="number" min="-80" max="-5"></div>
-      <div><label for="answerDelayMs">Sin detección: esperar antes del audio (ms)</label><input id="answerDelayMs" type="number" min="0" max="10000" step="100"></div>
+      <div><label for="answerDelayMs">Sin detección: esperar antes del audio (seg)</label><input id="answerDelayMs" type="number" min="0" max="10" step="0.1"></div>
     </div>
-    <p class="muted">1000 ms = 1 segundo. Las llamadas de prueba siempre hacen la detección y muestran el análisis en el detalle.
+    <p class="muted">Podés usar decimales: 0.7 = siete décimas de segundo. Las llamadas de prueba siempre hacen la detección y muestran el análisis en el detalle.
       Si toma ruido como voz, bajá la sensibilidad (ej. de -45 a -38). Si no detecta el "Hola", subila (ej. -50).</p>
     <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar</button></div>
   </section>
@@ -226,6 +226,8 @@
 let KEY = '';
 try { KEY = localStorage.getItem('ll_key') || ''; } catch (e) {}
 let configLoaded = false;
+// Estos se guardan en milisegundos pero en el panel se muestran en segundos.
+const MS_KEYS = ['amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs'];
 const CFG_KEYS = ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist',
   'amdEnabled', 'amdOnMachine', 'amdThresholdDb', 'amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs'];
 let timer = null;
@@ -302,7 +304,10 @@ async function refresh() {
 
   if (!configLoaded) {
     const c = s.config;
-    for (const k of CFG_KEYS) $(k).value = String(c[k] ?? '');
+    for (const k of CFG_KEYS) {
+      const v = c[k] ?? '';
+      $(k).value = MS_KEYS.includes(k) && v !== '' ? String(Number(v) / 1000) : String(v);
+    }
     configLoaded = true;
   }
 
@@ -367,7 +372,10 @@ function testCall() {
 
 async function saveConfig(silent) {
   const body = {};
-  for (const k of CFG_KEYS) body[k] = $(k).value;
+  for (const k of CFG_KEYS) {
+    const v = $(k).value;
+    body[k] = MS_KEYS.includes(k) && v !== '' ? Math.round(parseFloat(String(v).replace(',', '.')) * 1000) : v;
+  }
   try {
     await api('/api/config', { method: 'POST', body: JSON.stringify(body) });
     if (!silent) toast('Configuración guardada');
