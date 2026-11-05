@@ -3,7 +3,9 @@ package com.lallamada.app
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioRecord
 import android.media.AudioTrack
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import java.io.FileInputStream
@@ -77,6 +79,78 @@ class ShellService() : IShellService.Stub() {
 
     override fun setParams(keyValues: String) {
         audioManager()?.setParameters(keyValues)
+    }
+
+    /**
+     * Prueba de captura del audio que llega del otro lado (para detectar contestadores).
+     * No graba nada: calcula el volumen cada 250 ms y lo devuelve como texto.
+     */
+    override fun captureLevels(seconds: Int): String {
+        val rate = 16000
+        val shellCtx = try { context?.createPackageContext("com.android.shell", 0) } catch (e: Throwable) { null }
+        val sources = listOf(3 to "VOICE_DOWNLINK", 4 to "VOICE_CALL")
+        val errors = StringBuilder()
+        for ((src, name) in sources) {
+            var rec: AudioRecord? = null
+            try {
+                val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                val b = AudioRecord.Builder()
+                    .setAudioSource(src)
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(rate)
+                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(maxOf(minBuf, rate))
+                if (shellCtx != null && Build.VERSION.SDK_INT >= 31) b.setContext(shellCtx)
+                rec = b.build()
+                if (rec.state != AudioRecord.STATE_INITIALIZED) {
+                    errors.append(name).append(": no inicializa; ")
+                    continue
+                }
+                rec.startRecording()
+                val frame = rate / 4
+                val buf = ShortArray(frame)
+                val levels = ArrayList<Double>()
+                val end = System.currentTimeMillis() + seconds * 1000L
+                while (System.currentTimeMillis() < end) {
+                    var got = 0
+                    while (got < frame) {
+                        val n = rec.read(buf, got, frame - got)
+                        if (n <= 0) break
+                        got += n
+                    }
+                    if (got <= 0) break
+                    var sum = 0.0
+                    for (i in 0 until got) {
+                        val v = buf[i] / 32768.0
+                        sum += v * v
+                    }
+                    val rms = Math.sqrt(sum / got)
+                    levels.add(if (rms > 0) 20 * Math.log10(rms) else -100.0)
+                }
+                if (levels.isEmpty()) {
+                    errors.append(name).append(": sin datos; ")
+                    continue
+                }
+                val max = levels.maxOrNull() ?: -100.0
+                val avg = levels.average()
+                val voice = levels.count { it > -45 } * 100 / levels.size
+                val chars = " .:-=+*#"
+                val spark = levels.joinToString("") { l ->
+                    chars[((l + 70) / 50 * 7).toInt().coerceIn(0, 7)].toString()
+                }
+                return "OK fuente=$name máx=${max.toInt()}dB prom=${avg.toInt()}dB voz=$voice% [$spark]"
+            } catch (e: Throwable) {
+                errors.append(name).append(": ").append(cause(e)).append("; ")
+            } finally {
+                try { rec?.stop() } catch (_: Throwable) {}
+                try { rec?.release() } catch (_: Throwable) {}
+            }
+        }
+        return "FALLÓ: $errors"
     }
 
     override fun stopPlay() {

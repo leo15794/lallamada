@@ -245,7 +245,7 @@ class CampaignService : Service() {
 
     // ---------- Una llamada ----------
 
-    private fun doCall(c: Contact): Pair<String, String> {
+    private fun doCall(c: Contact, captureTest: Boolean = false): Pair<String, String> {
         val who = if (c.name.isNotEmpty()) "${c.name} (${c.phone})" else c.phone
         Live.status = "Llamando a $who"
         placeCall(c.phone)
@@ -272,9 +272,27 @@ class CampaignService : Service() {
 
         Live.status = "Atendió: $who"
         diag("atendió ${c.phone}")
-        pause(1500)
 
-        val detail: String
+        // Prueba de captura (solo en llamadas de prueba): escuchar 4 s lo que dice el otro lado.
+        var capture = ""
+        if (captureTest) {
+            val shell = ShellBridge.service
+            capture = if (shell == null) {
+                "captura: sin Shizuku"
+            } else {
+                Live.status = "Escuchando 4 s: decí \"Hola\" en el otro teléfono"
+                "captura: " + try { shell.captureLevels(4) } catch (e: Exception) { "FALLÓ: ${e.message}" }
+            }
+            diag(capture)
+            if (!inCall()) {
+                Live.inCall = false
+                return "atendió" to "$capture | cortó durante la escucha"
+            }
+        } else {
+            pause(1500)
+        }
+
+        var detail: String
         val talkMs: Long
         val configured = Store.talkSec(this)
         val mode = Store.mode(this)
@@ -290,6 +308,7 @@ class CampaignService : Service() {
             }
             diag("después del audio a ${c.phone}: $detail")
             talkMs = 1500L
+            if (capture.isNotEmpty()) detail = "$capture | $detail"
         } else if (mode == Store.MODE_SPEAK) {
             val msg = Store.message(this)
             Live.status = "Diciendo el mensaje a $who"
@@ -368,8 +387,10 @@ class CampaignService : Service() {
                 pause(200)
                 k++
             }
-            return "MediaTek: audio reproducido (${dur / 1000} s)" +
-                if (ShellBridge.service != null) " (con Shizuku)" else " (sin Shizuku)"
+            val heard = if (inCall()) dur else try { mp.currentPosition.toLong() } catch (_: Exception) { dur }
+            val tail = if (ShellBridge.service != null) " (con Shizuku)" else " (sin Shizuku)"
+            return if (heard >= dur - 700) "MediaTek: escuchó completo (${dur / 1000} s)$tail"
+            else "MediaTek: cortó a los ${heard / 1000} s de ${dur / 1000} s$tail"
         } catch (e: InterruptedException) {
             throw e
         } catch (e: Exception) {
@@ -525,7 +546,7 @@ class CampaignService : Service() {
 
     private fun runTest(phone: String) {
         val c = Contact(phone, "PRUEBA")
-        val (result, detail) = doCall(c)
+        val (result, detail) = doCall(c, captureTest = true)
         Store.appendResult(this, c, result, detail)
         Live.status = "Prueba terminada: $result - $detail"
     }

@@ -15,4 +15,7 @@ interface IShellService {
 
     // Parámetros internos del sistema de audio (por ejemplo los de MediaTek).
     void setParams(String keyValues) = 4;
+
+    // Escucha el audio que llega de la llamada durante unos segundos y devuelve un resumen de niveles.
+    String captureLevels(int seconds) = 5;
 }
