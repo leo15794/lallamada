@@ -11,6 +11,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -86,6 +87,10 @@ class MainActivity : Activity() {
     private lateinit var btnPreview: Button
     private lateinit var message: EditText
     private var preview: MediaPlayer? = null
+    private var previewFx: LoudnessEnhancer? = null
+    private lateinit var boost: EditText
+    private val outViews = mutableMapOf<String, TextView>()
+    private var audioOut = Store.OUT_MEDIA
 
     // Clientes
     private lateinit var clientsInfo: TextView
@@ -243,6 +248,27 @@ class MainActivity : Activity() {
         btnPreview = btn("▶  Escuchar", S_OUTLINE) { togglePreview() }
         arow.addView(btnPreview, LinearLayout.LayoutParams(0, WRAP, 1f).apply { leftMargin = px(10) })
         audioPanel.addView(arow, lp(top = 10))
+
+        boost = field(audioPanel, "Refuerzo de volumen (0 a 3000; probá 1500, 2000, 2500)",
+            Store.boostMb(this).toString(), InputType.TYPE_CLASS_NUMBER)
+        audioPanel.addView(tv("Salida del audio durante la llamada (probá cuál se escucha más fuerte):", 13f, C_MUTED), lp(top = 12))
+        val outTabs = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(C_FIELD, 12, C_BORDER)
+            setPadding(px(4), px(4), px(4), px(4))
+        }
+        listOf(Store.OUT_MEDIA to "Multimedia", Store.OUT_CALL to "Llamada").forEachIndexed { i, (key, label) ->
+            val t = tv(label, 14f, C_TEXT, bold = true).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, px(9), 0, px(9))
+                setOnClickListener { selectOut(key) }
+            }
+            outViews[key] = t
+            outTabs.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f).apply { if (i > 0) leftMargin = px(4) })
+        }
+        audioPanel.addView(outTabs, lp(top = 4))
+        selectOut(Store.audioOut(this))
+
         audioPanel.addView(
             tv(
                 "Cuando atienden, la app pone la llamada en altavoz y reproduce el audio por el parlante. " +
@@ -476,6 +502,15 @@ class MainActivity : Activity() {
         dialPanel.visibility = if (m == Store.MODE_DIAL_ONLY) View.VISIBLE else View.GONE
     }
 
+    private fun selectOut(o: String) {
+        audioOut = o
+        for ((key, t) in outViews) {
+            val sel = key == o
+            t.background = if (sel) rounded(C_PRIMARY, 9) else null
+            t.setTextColor(if (sel) Color.WHITE else C_MUTED)
+        }
+    }
+
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
 
     private fun num(e: EditText, def: Int) = e.text.toString().trim().toIntOrNull() ?: def
@@ -499,6 +534,8 @@ class MainActivity : Activity() {
     private fun save() {
         Store.putStr(this, "message", message.text.toString().trim())
         Store.putStr(this, "mode", mode)
+        Store.putInt(this, "boost", num(boost, 1500).coerceIn(0, 3000))
+        Store.putStr(this, "audioOut", audioOut)
         Store.putInt(this, "ring", num(ring, 35).coerceIn(10, 120))
         Store.putInt(this, "pause", num(pauseField, 20).coerceIn(0, 3600))
         Store.putInt(this, "talk", num(talk, 0).coerceIn(0, 600))
@@ -606,6 +643,15 @@ class MainActivity : Activity() {
             mp.setDataSource(Store.audioFile(this).absolutePath)
             mp.setOnCompletionListener { stopPreview() }
             mp.prepare()
+            val b = num(boost, 1500).coerceIn(0, 3000)
+            if (b > 0) {
+                try {
+                    previewFx = LoudnessEnhancer(mp.audioSessionId).apply {
+                        setTargetGain(b)
+                        setEnabled(true)
+                    }
+                } catch (_: Exception) {}
+            }
             mp.start()
             preview = mp
             btnPreview.text = "■  Parar"
@@ -620,6 +666,8 @@ class MainActivity : Activity() {
             it.release()
         }
         preview = null
+        try { previewFx?.release() } catch (_: Exception) {}
+        previewFx = null
         if (::btnPreview.isInitialized) btnPreview.text = "▶  Escuchar"
     }
 

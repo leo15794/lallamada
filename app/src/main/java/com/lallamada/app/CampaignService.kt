@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -241,20 +242,38 @@ class CampaignService : Service() {
             pause(900)
         }
 
-        val stream = AudioManager.STREAM_MUSIC
-        val oldVol = am.getStreamVolume(stream)
-        try { am.setStreamVolume(stream, am.getStreamMaxVolume(stream), 0) } catch (_: Exception) {}
+        // Todo al máximo: multimedia y volumen de llamada.
+        val streams = listOf(AudioManager.STREAM_MUSIC, AudioManager.STREAM_VOICE_CALL)
+        val oldVols = streams.associateWith { am.getStreamVolume(it) }
+        for (s in streams) {
+            try { am.setStreamVolume(s, am.getStreamMaxVolume(s), 0) } catch (_: Exception) {}
+        }
 
+        val asCall = Store.audioOut(this) == Store.OUT_CALL
         val mp = MediaPlayer()
+        var enhancer: LoudnessEnhancer? = null
         try {
             mp.setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setUsage(if (asCall) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
             mp.setDataSource(f.absolutePath)
             mp.prepare()
+            val boost = Store.boostMb(this)
+            if (boost > 0) {
+                try {
+                    enhancer = LoudnessEnhancer(mp.audioSessionId).apply {
+                        setTargetGain(boost)
+                        setEnabled(true)
+                    }
+                    notes.add("refuerzo +${boost / 100} dB")
+                } catch (e: Exception) {
+                    notes.add("sin refuerzo (${e.message})")
+                }
+            }
+            notes.add(if (asCall) "salida: llamada" else "salida: multimedia")
             mp.start()
             val dur = mp.duration.toLong().coerceAtLeast(1000L)
             waitUntil(dur + 500L) { !inCall() }
@@ -265,8 +284,11 @@ class CampaignService : Service() {
             notes.add(0, "error de audio: ${e.message}")
         } finally {
             try { mp.stop() } catch (_: Exception) {}
+            try { enhancer?.release() } catch (_: Exception) {}
             mp.release()
-            try { am.setStreamVolume(stream, oldVol, 0) } catch (_: Exception) {}
+            for ((s, v) in oldVols) {
+                try { am.setStreamVolume(s, v, 0) } catch (_: Exception) {}
+            }
         }
         return notes.joinToString(", ")
     }

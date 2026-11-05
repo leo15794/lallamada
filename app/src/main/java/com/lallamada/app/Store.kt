@@ -46,6 +46,11 @@ object Store {
     fun kwSpeaker(ctx: Context) = splitList(str(ctx, "kwSpeaker", DEFAULT_SPEAKER))
     fun audioFile(ctx: Context) = File(ctx.filesDir, "mensaje_audio")
     fun audioName(ctx: Context) = str(ctx, "audioName", "")
+    /** Refuerzo de volumen en milibeles (LoudnessEnhancer). 1000 mB = +10 dB. */
+    fun boostMb(ctx: Context) = int(ctx, "boost", 1500)
+    const val OUT_MEDIA = "media"
+    const val OUT_CALL = "call"
+    fun audioOut(ctx: Context) = str(ctx, "audioOut", OUT_MEDIA)
     fun ringTimeout(ctx: Context) = int(ctx, "ring", 35)
     fun pauseSec(ctx: Context) = int(ctx, "pause", 20)
     fun talkSec(ctx: Context) = int(ctx, "talk", 0)
