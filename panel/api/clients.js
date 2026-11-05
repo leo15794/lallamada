@@ -1,4 +1,4 @@
-import { sql, auth, parseClients, setKV } from './_lib.js';
+import { sql, auth, parseClients, explainNoPhones, setKV } from './_lib.js';
 
 export default async function handler(req, res) {
   if (!auth(req, res)) return;
@@ -8,8 +8,9 @@ export default async function handler(req, res) {
     return res.json({ clients: rows });
   }
   if (req.method !== 'POST') return res.status(405).end();
-  const list = parseClients((req.body && req.body.text) || '');
-  if (!list.length) return res.status(400).json({ error: 'No encontré teléfonos en el archivo' });
+  const text = (req.body && req.body.text) || '';
+  const list = parseClients(text);
+  if (!list.length) return res.status(400).json({ error: explainNoPhones(text) });
   const pos = list.map((_, i) => i);
   const phones = list.map((c) => c.phone);
   const names = list.map((c) => c.name);

@@ -41,7 +41,8 @@ export async function getConfig() {
 export function parseClients(text) {
   const out = [];
   const seen = new Set();
-  for (const line of String(text).split(/\r?\n/)) {
+  const clean = String(text).replace(/[\u0000\uFEFF]/g, '');
+  for (const line of clean.split(/\r?\n/)) {
     let phone = null;
     let name = '';
     for (const raw of line.split(/[,;\t]/)) {
@@ -61,4 +62,18 @@ export function parseClients(text) {
     }
   }
   return out;
+}
+
+/** Explica por qué un archivo no tiene teléfonos reconocibles. */
+export function explainNoPhones(text) {
+  const clean = String(text).replace(/[\u0000\uFEFF]/g, '');
+  const lines = clean.split(/\r?\n/).filter((l) => l.trim()).slice(0, 3);
+  let why = 'No encontré teléfonos (necesito al menos 8 dígitos por número).';
+  if (/\d[.,]\d+E\+?\d+/i.test(clean)) {
+    why = 'Excel convirtió los teléfonos a notación científica (por ejemplo 5,49E+12) y se perdieron los dígitos. ' +
+      'En Excel poné la columna del teléfono con formato Texto, volvé a escribir/pegar los números y guardá de nuevo como CSV.';
+  } else if (!lines.length) {
+    why = 'El archivo está vacío.';
+  }
+  return why + (lines.length ? ' Primeras líneas recibidas: ' + lines.map((l) => '«' + l.slice(0, 60) + '»').join(' | ') : '');
 }

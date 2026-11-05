@@ -84,7 +84,7 @@ object Store {
     // ---------- Clientes ----------
 
     fun parseContacts(text: String): List<Contact> =
-        text.lineSequence().mapNotNull { line ->
+        text.replace("\u0000", "").replace("\uFEFF", "").lineSequence().mapNotNull { line ->
             var phone: String? = null
             var name = ""
             for (raw in line.split(',', ';', '\t')) {

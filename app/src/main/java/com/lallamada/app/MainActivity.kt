@@ -968,12 +968,29 @@ class MainActivity : Activity() {
         try {
             when (requestCode) {
                 REQ_CONTACTS -> {
-                    val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+                    val text = when {
+                        bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte() ->
+                            String(bytes, Charsets.UTF_16LE)
+                        bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte() ->
+                            String(bytes, Charsets.UTF_16BE)
+                        else -> String(bytes, Charsets.UTF_8)
+                    }
                     if (text.startsWith("PK")) {
                         toast("Eso es un Excel (.xlsx). Guardalo como CSV y cargalo de nuevo.")
                         return
                     }
                     val list = Store.parseContacts(text)
+                    if (list.isEmpty()) {
+                        val sci = Regex("\\d[.,]\\d+E\\+?\\d+", RegexOption.IGNORE_CASE).containsMatchIn(text)
+                        toast(
+                            if (sci) "Excel convirtió los teléfonos a notación científica (ej. 5,49E+12). " +
+                                "Poné la columna del teléfono con formato Texto y guardá de nuevo como CSV."
+                            else "No encontré teléfonos (necesito al menos 8 dígitos por número). Primera línea: " +
+                                text.lineSequence().firstOrNull { it.isNotBlank() }?.take(60).orEmpty()
+                        )
+                        return
+                    }
                     Store.saveContacts(this, list)
                     toast("Cargados ${list.size} clientes")
                 }

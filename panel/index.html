@@ -186,7 +186,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3000);
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), Math.max(3000, msg.length * 60));
 }
 
 async function api(path, opts = {}) {
@@ -300,11 +300,20 @@ async function uploadClients() {
   const f = $('clientsFile').files[0];
   if (!f) return toast('Elegí un archivo');
   if (/\.xlsx?$/i.test(f.name)) return toast('Es un Excel: guardalo como CSV y subilo de nuevo');
-  const text = await f.text();
+  const text = await readTextSmart(f);
   try {
     const r = await (await api('/api/clients', { method: 'POST', body: JSON.stringify({ text }) })).json();
     toast(`Lista subida: ${r.count} clientes`); $('clientsFile').value = ''; refresh();
   } catch (e) { toast(e.message); }
+}
+
+/** Lee el archivo detectando UTF-16 (Excel "Texto Unicode"), UTF-8 o ANSI (Windows-1252). */
+async function readTextSmart(f) {
+  const b = new Uint8Array(await f.arrayBuffer());
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder('utf-16be').decode(b);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); }
+  catch (e) { return new TextDecoder('windows-1252').decode(b); }
 }
 
 async function uploadAudio() {
