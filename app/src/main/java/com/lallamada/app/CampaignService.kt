@@ -15,6 +15,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.telecom.TelecomManager
 import java.util.Calendar
@@ -35,6 +36,7 @@ class CampaignService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             Live.stopRequested = true
+            try { ShellBridge.service?.stopPlay() } catch (_: Exception) {}
             Live.worker?.interrupt()
             if (!Live.running) stopSelf()
             return START_NOT_STICKY
@@ -199,7 +201,12 @@ class CampaignService : Service() {
         val mode = Store.mode(this)
         if (mode == Store.MODE_AUDIO) {
             Live.status = "Reproduciendo el audio a $who"
-            detail = playAudioInCall()
+            detail = if (Store.audioMethod(this) == Store.METHOD_DIRECT) {
+                val r = playDirect()
+                if (r.startsWith("FALLÓ")) "$r → uso altavoz: " + playAudioInCall() else r
+            } else {
+                playAudioInCall()
+            }
             diag("después del audio a ${c.phone}: $detail")
             talkMs = 1500L
         } else if (mode == Store.MODE_SPEAK) {
@@ -228,6 +235,39 @@ class CampaignService : Service() {
      * Android no deja meter audio dentro de una llamada. Vuelta: activar el altavoz de la llamada
      * y reproducir el audio por el parlante para que lo capte el micrófono.
      */
+    /** Audio directo a la llamada usando Shizuku (sin altavoz). */
+    private fun playDirect(): String {
+        val shell = ShellBridge.service ?: return "FALLÓ: Shizuku no está conectado"
+        val pcm = try {
+            Pcm.prepare(this)
+        } catch (e: Exception) {
+            return "FALLÓ: no pude convertir el audio (${e.message})"
+        }
+        val pfd = ParcelFileDescriptor.open(pcm, ParcelFileDescriptor.MODE_READ_ONLY)
+        // Si el cliente corta o se pide detener, frenar la reproducción.
+        val watcher = Thread {
+            try {
+                while (true) {
+                    Thread.sleep(400)
+                    if (!inCall() || Live.stopRequested) {
+                        try { shell.stopPlay() } catch (_: Exception) {}
+                        break
+                    }
+                }
+            } catch (_: InterruptedException) {}
+        }
+        watcher.start()
+        return try {
+            val r = shell.injectPcm(pfd, Pcm.RATE)
+            if (r.startsWith("OK")) "audio directo $r" else "FALLÓ: $r"
+        } catch (e: Exception) {
+            "FALLÓ: ${e.message}"
+        } finally {
+            watcher.interrupt()
+            try { pfd.close() } catch (_: Exception) {}
+        }
+    }
+
     private fun playAudioInCall(): String {
         val f = Store.audioFile(this)
         if (!f.exists()) return "No hay audio cargado"

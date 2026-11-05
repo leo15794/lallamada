@@ -91,6 +91,15 @@ class MainActivity : Activity() {
     private lateinit var boost: EditText
     private val outViews = mutableMapOf<String, TextView>()
     private var audioOut = Store.OUT_MEDIA
+    private val methodViews = mutableMapOf<String, TextView>()
+    private var audioMethod = Store.METHOD_SPEAKER
+    private lateinit var directPanel: LinearLayout
+    private lateinit var speakerPanel: LinearLayout
+    private lateinit var shizukuStatus: TextView
+    private lateinit var btnShizukuInstall: Button
+    private lateinit var btnShizukuOpen: Button
+    private lateinit var btnShizukuPerm: Button
+    private lateinit var checkResult: TextView
 
     // Clientes
     private lateinit var clientsInfo: TextView
@@ -249,9 +258,51 @@ class MainActivity : Activity() {
         arow.addView(btnPreview, LinearLayout.LayoutParams(0, WRAP, 1f).apply { leftMargin = px(10) })
         audioPanel.addView(arow, lp(top = 10))
 
-        boost = field(audioPanel, "Refuerzo de volumen (0 a 3000; probá 1500, 2000, 2500)",
+        // Método: directo (Shizuku) o altavoz
+        audioPanel.addView(tv("Cómo se pasa el audio a la llamada:", 13f, C_MUTED), lp(top = 14))
+        val methodTabs = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(C_FIELD, 12, C_BORDER)
+            setPadding(px(4), px(4), px(4), px(4))
+        }
+        listOf(Store.METHOD_DIRECT to "Directo (Shizuku)", Store.METHOD_SPEAKER to "Altavoz").forEachIndexed { i, (key, label) ->
+            val t = tv(label, 14f, C_TEXT, bold = true).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, px(9), 0, px(9))
+                setOnClickListener { selectMethod(key) }
+            }
+            methodViews[key] = t
+            methodTabs.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f).apply { if (i > 0) leftMargin = px(4) })
+        }
+        audioPanel.addView(methodTabs, lp(top = 4))
+
+        directPanel = vbox()
+        directPanel.addView(
+            tv(
+                "El audio entra limpio a la llamada, sin altavoz. Necesita la app Shizuku " +
+                    "(gratis, sin root). Si falla en una llamada, la app usa el altavoz automáticamente.",
+                12f, C_MUTED
+            ), lp(top = 8)
+        )
+        shizukuStatus = tv("", 14f, C_TEXT, bold = true)
+        directPanel.addView(shizukuStatus, lp(top = 8))
+        btnShizukuInstall = btn("1. Instalar Shizuku (Play Store)", S_OUTLINE) { openShizukuStore() }
+        directPanel.addView(btnShizukuInstall, lp(top = 8))
+        btnShizukuOpen = btn("2. Abrir Shizuku para iniciarlo", S_OUTLINE) { openShizuku() }
+        directPanel.addView(btnShizukuOpen, lp(top = 8))
+        btnShizukuPerm = btn("3. Dar permiso a La Llamada", S_PRIMARY) { ShellBridge.requestPermission() }
+        directPanel.addView(btnShizukuPerm, lp(top = 8))
+        directPanel.addView(btn("Verificar compatibilidad", S_PRIMARY) { runCheck() }, lp(top = 8))
+        checkResult = tv("", 12f, C_TEXT).apply { setTextIsSelectable(true) }
+        directPanel.addView(checkResult, lp(top = 8))
+        audioPanel.addView(directPanel)
+
+        speakerPanel = vbox()
+        audioPanel.addView(speakerPanel)
+
+        boost = field(speakerPanel, "Refuerzo de volumen (0 a 3000; probá 1500, 2000, 2500)",
             Store.boostMb(this).toString(), InputType.TYPE_CLASS_NUMBER)
-        audioPanel.addView(tv("Salida del audio durante la llamada (probá cuál se escucha más fuerte):", 13f, C_MUTED), lp(top = 12))
+        speakerPanel.addView(tv("Salida del audio durante la llamada (probá cuál se escucha más fuerte):", 13f, C_MUTED), lp(top = 12))
         val outTabs = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = rounded(C_FIELD, 12, C_BORDER)
@@ -266,8 +317,9 @@ class MainActivity : Activity() {
             outViews[key] = t
             outTabs.addView(t, LinearLayout.LayoutParams(0, WRAP, 1f).apply { if (i > 0) leftMargin = px(4) })
         }
-        audioPanel.addView(outTabs, lp(top = 4))
+        speakerPanel.addView(outTabs, lp(top = 4))
         selectOut(Store.audioOut(this))
+        selectMethod(Store.audioMethod(this))
 
         audioPanel.addView(
             tv(
@@ -502,6 +554,74 @@ class MainActivity : Activity() {
         dialPanel.visibility = if (m == Store.MODE_DIAL_ONLY) View.VISIBLE else View.GONE
     }
 
+    private fun selectMethod(m: String) {
+        audioMethod = m
+        for ((key, t) in methodViews) {
+            val sel = key == m
+            t.background = if (sel) rounded(C_PRIMARY, 9) else null
+            t.setTextColor(if (sel) Color.WHITE else C_MUTED)
+        }
+        directPanel.visibility = if (m == Store.METHOD_DIRECT) View.VISIBLE else View.GONE
+        speakerPanel.visibility = if (m == Store.METHOD_SPEAKER) View.VISIBLE else View.GONE
+        if (m == Store.METHOD_DIRECT) ShellBridge.bind()
+    }
+
+    private fun shizukuInstalled(): Boolean = try {
+        packageManager.getPackageInfo(ShellBridge.SHIZUKU_PACKAGE, 0)
+        true
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun openShizukuStore() {
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${ShellBridge.SHIZUKU_PACKAGE}"))
+        try {
+            startActivity(market)
+        } catch (e: Exception) {
+            startActivity(Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=${ShellBridge.SHIZUKU_PACKAGE}")))
+        }
+    }
+
+    private fun openShizuku() {
+        val i = packageManager.getLaunchIntentForPackage(ShellBridge.SHIZUKU_PACKAGE)
+        if (i == null) toast("Primero instalá Shizuku") else startActivity(i)
+    }
+
+    private fun refreshShizuku() {
+        if (audioMethod != Store.METHOD_DIRECT) return
+        ShellBridge.bind()
+        val installed = shizukuInstalled()
+        val connected = ShellBridge.service != null
+        shizukuStatus.text = ShellBridge.statusText(installed)
+        shizukuStatus.setTextColor(if (connected) C_GREEN else C_RED)
+        btnShizukuInstall.visibility = if (installed) View.GONE else View.VISIBLE
+        btnShizukuOpen.visibility = if (installed && !ShellBridge.running()) View.VISIBLE else View.GONE
+        btnShizukuPerm.visibility = if (ShellBridge.running() && !ShellBridge.granted()) View.VISIBLE else View.GONE
+    }
+
+    private fun runCheck() {
+        val shell = ShellBridge.service
+        if (shell == null) {
+            toast("Primero conectá Shizuku (pasos de arriba)")
+            return
+        }
+        checkResult.text = "Verificando..."
+        Thread {
+            val r = try { shell.check() } catch (e: Exception) { "error: ${e.message}" }
+            val ok = r.contains("pstn_interceptable=true")
+            val verdict = if (ok)
+                "✅ COMPATIBLE: tu celular permite el audio directo. Hacé una llamada de prueba."
+            else
+                "❌ No parece compatible (pstn_interceptable no es true). Igual podés probar una llamada; si falla, se usa el altavoz."
+            Store.appendDiag(this, "== verificación Shizuku ==\n$r")
+            runOnUiThread {
+                checkResult.text = "$verdict\n\n$r"
+                checkResult.setTextColor(if (ok) C_GREEN else C_TEXT)
+            }
+        }.start()
+    }
+
     private fun selectOut(o: String) {
         audioOut = o
         for ((key, t) in outViews) {
@@ -536,6 +656,7 @@ class MainActivity : Activity() {
         Store.putStr(this, "mode", mode)
         Store.putInt(this, "boost", num(boost, 1500).coerceIn(0, 3000))
         Store.putStr(this, "audioOut", audioOut)
+        Store.putStr(this, "audioMethod", audioMethod)
         Store.putInt(this, "ring", num(ring, 35).coerceIn(10, 120))
         Store.putInt(this, "pause", num(pauseField, 20).coerceIn(0, 3600))
         Store.putInt(this, "talk", num(talk, 0).coerceIn(0, 600))
@@ -551,6 +672,7 @@ class MainActivity : Activity() {
     }
 
     private fun refresh() {
+        refreshShizuku()
         val permsOk = missingPermissions().isEmpty()
         val accOk = Live.service != null
         val contacts = Store.loadContacts(this).size
@@ -797,6 +919,11 @@ class MainActivity : Activity() {
                     Store.putStr(this, "audioName", displayName(uri))
                     refreshAudioInfo()
                     toast("Audio cargado")
+                    Thread {
+                        try { Pcm.prepare(this) } catch (e: Exception) {
+                            runOnUiThread { toast("Ojo: no pude convertir el audio para el modo directo (${e.message})") }
+                        }
+                    }.start()
                 }
                 REQ_EXPORT_RESULTS -> copyTo(Store.resultsFile(this), uri)
                 REQ_EXPORT_DIAG -> copyTo(Store.diagFile(this), uri)

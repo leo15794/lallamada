@@ -49,10 +49,17 @@ android {
 
     buildFeatures {
         buildConfig = true
+        aidl = true
     }
 
     lint {
         checkReleaseBuilds = false
         abortOnError = false
     }
+}
+
+dependencies {
+    // Shizuku: permisos de nivel "depuración" (ADB) sin root, para el modo de audio directo.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }
