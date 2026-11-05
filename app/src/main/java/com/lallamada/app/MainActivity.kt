@@ -100,6 +100,10 @@ class MainActivity : Activity() {
     private lateinit var btnShizukuOpen: Button
     private lateinit var btnShizukuPerm: Button
     private lateinit var checkResult: TextView
+    private lateinit var remoteUrl: EditText
+    private lateinit var remoteKey: EditText
+    private lateinit var remoteStatusView: TextView
+    private lateinit var btnRemote: Button
     private lateinit var mtkNote: TextView
 
     // Clientes
@@ -160,6 +164,7 @@ class MainActivity : Activity() {
 
         buildStatus()
         buildSetup()
+        buildRemote()
         buildMessage()
         buildClients()
         buildRhythm()
@@ -225,6 +230,46 @@ class MainActivity : Activity() {
                 12f, C_MUTED
             ), lp(top = 8)
         )
+    }
+
+    private fun buildRemote() {
+        val c = card("Control remoto (panel web)", "🖥️")
+        remoteStatusView = tv("", 14f, C_TEXT, bold = true)
+        c.addView(remoteStatusView, lp(top = 8))
+        remoteUrl = field(c, "Dirección del panel", Store.str(this, "remoteUrl", ""),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, hint = "https://...")
+        remoteKey = field(c, "Contraseña del panel", Store.str(this, "remoteKey", ""),
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        btnRemote = btn("Activar control remoto", S_PRIMARY) { toggleRemote() }
+        c.addView(btnRemote, lp(top = 10))
+        c.addView(
+            tv(
+                "Dejá el celular enchufado, con Wi-Fi y con Shizuku iniciado. " +
+                    "Las órdenes del panel llegan en unos segundos.",
+                12f, C_MUTED
+            ), lp(top = 8)
+        )
+        if (Store.bool(this, "remoteOn", false)) {
+            try {
+                startForegroundService(Intent(this, CampaignService::class.java).setAction(CampaignService.ACTION_REMOTE_ON))
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun toggleRemote() {
+        save()
+        if (!Store.bool(this, "remoteOn", false)) {
+            if (!Store.str(this, "remoteUrl", "").trim().startsWith("http")) {
+                toast("Poné la dirección del panel (empieza con https://)")
+                return
+            }
+            Store.putBool(this, "remoteOn", true)
+            startForegroundService(Intent(this, CampaignService::class.java).setAction(CampaignService.ACTION_REMOTE_ON))
+        } else {
+            Store.putBool(this, "remoteOn", false)
+            startService(Intent(this, CampaignService::class.java).setAction(CampaignService.ACTION_REMOTE_OFF))
+        }
+        refresh()
     }
 
     private fun buildMessage() {
@@ -666,6 +711,8 @@ class MainActivity : Activity() {
         Store.putInt(this, "boost", num(boost, 1500).coerceIn(0, 3000))
         Store.putStr(this, "audioOut", audioOut)
         Store.putStr(this, "audioMethod", audioMethod)
+        Store.putStr(this, "remoteUrl", remoteUrl.text.toString().trim())
+        Store.putStr(this, "remoteKey", remoteKey.text.toString().trim())
         Store.putInt(this, "ring", num(ring, 35).coerceIn(10, 120))
         Store.putInt(this, "pause", num(pauseField, 20).coerceIn(0, 3600))
         Store.putInt(this, "talk", num(talk, 0).coerceIn(0, 600))
@@ -682,6 +729,12 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         refreshShizuku()
+        val remoteOn = Store.bool(this, "remoteOn", false)
+        remoteStatusView.text = if (remoteOn) Live.remoteStatus else "Control remoto apagado"
+        remoteStatusView.setTextColor(
+            if (remoteOn && Live.remoteStatus.startsWith("✓")) C_GREEN else if (remoteOn) C_RED else C_MUTED
+        )
+        btnRemote.text = if (remoteOn) "Desactivar control remoto" else "Activar control remoto"
         val permsOk = missingPermissions().isEmpty()
         val accOk = Live.service != null
         val contacts = Store.loadContacts(this).size

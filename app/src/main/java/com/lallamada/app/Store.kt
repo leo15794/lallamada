@@ -17,6 +17,7 @@ object Live {
     @Volatile var inCall = false
     @Volatile var status: String = "Detenido"
     @Volatile var worker: Thread? = null
+    @Volatile var remoteStatus: String = "Control remoto apagado"
 }
 
 /** Configuración, lista de clientes y resultados guardados en el teléfono. */

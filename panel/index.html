@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Llamada · Panel</title>
+<style>
+  :root {
+    --primary: #0f766e; --primary-dark: #115e59; --primary-soft: #e6f4f2;
+    --green: #16a34a; --red: #dc2626; --amber: #d97706;
+    --bg: #f1f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280; --border: #e5e7eb; --field: #f9fafb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --primary: #14b8a6; --primary-dark: #5eead4; --primary-soft: #134e4a;
+      --bg: #0b1215; --card: #121b1f; --text: #e5e7eb; --muted: #9ca3af; --border: #1f2a30; --field: #0f171a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: #0f766e; color: #fff; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 2px 0 0; opacity: .8; font-size: 13px; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border: 0; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+  .card h2 { margin: 0 0 12px; font-size: 17px; }
+  .wide { grid-column: 1 / -1; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--field); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  textarea { min-height: 90px; resize: vertical; }
+  button { font: inherit; font-weight: 700; border-radius: 12px; padding: 11px 16px; border: 1px solid transparent; cursor: pointer; background: var(--primary); color: #fff; }
+  button.outline { background: transparent; color: var(--primary); border-color: var(--primary); }
+  button.good { background: var(--green); }
+  button.bad { background: var(--red); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 0; min-width: 120px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .chip { padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+  .ok { background: var(--primary-soft); color: var(--primary-dark); }
+  .ko { background: #fdecec; color: var(--red); }
+  @media (prefers-color-scheme: dark) { .ko { background: #3b1414; } }
+  .status { font-size: 20px; font-weight: 700; margin: 4px 0; }
+  .bar { height: 10px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; background: var(--primary); width: 0; transition: width .4s; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  td.detail { color: var(--muted); font-size: 12px; }
+  .res-atendió { color: var(--green); font-weight: 700; }
+  .res-omitido { color: var(--muted); }
+  .res-no { color: var(--red); font-weight: 700; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat { flex: 1 1 120px; background: var(--field); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 24px; }
+  .tablewrap { overflow-x: auto; }
+  #login { max-width: 380px; margin: 12vh auto; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 12px 18px; border-radius: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+  .hidden { display: none !important; }
+  @media (max-width: 420px) { main { padding: 10px; grid-template-columns: 1fr; } header { padding: 14px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📞 La Llamada</h1>
+    <p>Panel de control remoto</p>
+  </div>
+  <button id="logout" class="hidden" onclick="logout()">Salir</button>
+</header>
+
+<section id="login" class="card">
+  <h2>Ingresar</h2>
+  <label for="pass">Contraseña del panel</label>
+  <input id="pass" type="password" autocomplete="current-password">
+  <div style="margin-top:14px"><button onclick="login()" style="width:100%">Entrar</button></div>
+  <p id="loginErr" class="muted" style="color:var(--red)"></p>
+</section>
+
+<main id="app" class="hidden">
+  <!-- Estado -->
+  <section class="card wide">
+    <div class="row" style="align-items:center">
+      <div style="flex:3 1 300px">
+        <div class="muted" id="online">—</div>
+        <div class="status" id="status">—</div>
+        <div class="muted" id="progressText"></div>
+        <div class="bar"><div id="bar"></div></div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div style="flex:1 1 220px; display:grid; gap:10px">
+        <button class="good" onclick="cmd('start')">▶ Iniciar campaña</button>
+        <button class="bad" onclick="cmd('stop')">■ Detener</button>
+      </div>
+    </div>
+    <p class="muted" id="pending"></p>
+  </section>
+
+  <!-- Clientes -->
+  <section class="card">
+    <h2>👥 Clientes</h2>
+    <div id="clientsInfo" class="muted"></div>
+    <label for="clientsFile">Cargar lista (CSV o TXT: teléfono, nombre — uno por línea)</label>
+    <input id="clientsFile" type="file" accept=".csv,.txt,text/csv,text/plain">
+    <div class="row" style="margin-top:10px">
+      <button onclick="uploadClients()">Subir lista</button>
+      <button class="outline" onclick="cmd('reset')">Volver a empezar</button>
+    </div>
+    <p class="muted">Al subir una lista nueva, el celular empieza desde el primer cliente. Desde Excel: Guardar como → CSV.</p>
+  </section>
+
+  <!-- Audio -->
+  <section class="card">
+    <h2>🔊 Audio del mensaje</h2>
+    <div id="audioInfo" class="muted"></div>
+    <audio id="player" controls class="hidden" style="width:100%;margin-top:8px"></audio>
+    <label for="audioFile">Elegir audio (MP3, M4A, WAV, OGG — máximo 3 MB)</label>
+    <input id="audioFile" type="file" accept="audio/*">
+    <div class="row" style="margin-top:10px">
+      <button onclick="uploadAudio()">Subir audio</button>
+      <button class="outline" onclick="loadPlayer()">▶ Escuchar el actual</button>
+    </div>
+  </section>
+
+  <!-- Configuración -->
+  <section class="card">
+    <h2>⚙️ Configuración</h2>
+    <label for="audioMethod">Cómo se pasa el audio a la llamada</label>
+    <select id="audioMethod">
+      <option value="mtk">MediaTek (recomendado para el A05)</option>
+      <option value="directo">Directo (Shizuku)</option>
+      <option value="altavoz">Altavoz</option>
+    </select>
+    <div class="row">
+      <div><label for="ring">Espera a que atiendan (s)</label><input id="ring" type="number" min="10" max="120"></div>
+      <div><label for="pause">Pausa entre llamadas (s)</label><input id="pause" type="number" min="0" max="3600"></div>
+    </div>
+    <div class="row">
+      <div><label for="hStart">Llamar desde (hora)</label><input id="hStart" type="number" min="0" max="24"></div>
+      <div><label for="hEnd">Hasta (hora)</label><input id="hEnd" type="number" min="0" max="24"></div>
+    </div>
+    <label for="blocklist">Lista de bajas / No Llame (un número por línea)</label>
+    <textarea id="blocklist"></textarea>
+    <div style="margin-top:12px"><button onclick="saveConfig()" style="width:100%">Guardar configuración</button></div>
+  </section>
+
+  <!-- Prueba -->
+  <section class="card">
+    <h2>🧪 Llamada de prueba</h2>
+    <label for="testNumber">Número</label>
+    <input id="testNumber" type="tel" placeholder="Ej: 1155551234">
+    <div style="margin-top:12px"><button onclick="testCall()" style="width:100%">Llamar de prueba</button></div>
+    <p class="muted">El celular tiene que estar con el control remoto activado. La orden llega en unos segundos.</p>
+  </section>
+
+  <!-- Resultados -->
+  <section class="card wide">
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <h2 style="margin:0;flex:3 1 200px">📊 Resultados</h2>
+      <button class="outline" onclick="exportCsv()">Exportar CSV</button>
+      <button class="outline" onclick="clearResults()">Borrar</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Teléfono</th><th>Nombre</th><th>Resultado</th><th>Detalle</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let KEY = '';
+try { KEY = localStorage.getItem('ll_key') || ''; } catch (e) {}
+let configLoaded = false;
+let timer = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    ...opts,
+    headers: { 'x-key': KEY, ...(opts.body ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); throw new Error('Contraseña incorrecta'); }
+  if (!r.ok) {
+    let msg = 'Error ' + r.status;
+    try { msg = (await r.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r;
+}
+
+async function login() {
+  KEY = $('pass').value.trim();
+  $('loginErr').textContent = '';
+  try {
+    await api('/api/state');
+    try { localStorage.setItem('ll_key', KEY); } catch (e) {}
+    start();
+  } catch (e) { $('loginErr').textContent = e.message; }
+}
+
+function logout() {
+  KEY = ''; try { localStorage.removeItem('ll_key'); } catch (e) {}
+  clearInterval(timer); configLoaded = false;
+  $('app').classList.add('hidden'); $('logout').classList.add('hidden'); $('login').classList.remove('hidden');
+}
+
+function start() {
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden'); $('logout').classList.remove('hidden');
+  refresh(); clearInterval(timer); timer = setInterval(refresh, 3000);
+}
+
+function chip(ok, text) { return `<span class="chip ${ok ? 'ok' : 'ko'}">${ok ? '✓' : '✗'} ${esc(text)}</span>`; }
+
+async function refresh() {
+  let s;
+  try { s = await (await api('/api/state')).json(); } catch (e) { return; }
+  const d = s.device;
+  const age = d ? (s.now - d.updatedAt) / 1000 : Infinity;
+  const online = age < 30;
+  $('online').innerHTML = online
+    ? '<span style="color:var(--green);font-weight:700">● Celular conectado</span>'
+    : `<span style="color:var(--red);font-weight:700">● Celular desconectado</span>${d ? ' — último contacto hace ' + fmtAge(age) : ''}`;
+  $('status').textContent = d ? (d.running ? '▶ ' : '') + (d.status || '—') : 'El celular todavía no se conectó';
+  const total = d ? d.total : 0, idx = d ? Math.min(d.index, total) : 0;
+  $('progressText').textContent = total ? `Llamados ${idx} de ${total}` : 'Sin clientes en el celular';
+  $('bar').style.width = total ? (idx * 100 / total) + '%' : '0';
+  $('chips').innerHTML = d ? [
+    chip(d.accessibility, 'Accesibilidad'), chip(d.shizuku, 'Shizuku'), chip(d.hasAudio, 'Audio: ' + (d.audioName || 'ninguno')),
+    `<span class="chip ok">App ${esc(d.version || '')}</span>`,
+  ].join('') : '';
+  const names = { start: 'iniciar', stop: 'detener', test: 'prueba', reset: 'volver a empezar' };
+  $('pending').textContent = s.pending.length ? 'Órdenes esperando que el celular las tome: ' + s.pending.map((p) => names[p.cmd] || p.cmd).join(', ') : '';
+
+  $('clientsInfo').textContent = s.clients ? `${s.clients} clientes en el panel` : 'Todavía no subiste clientes';
+  $('audioInfo').textContent = s.audio ? `🎵 ${s.audio.name} · ${(s.audio.size / 1024).toFixed(0)} KB` : 'Todavía no subiste audio';
+
+  if (!configLoaded) {
+    const c = s.config;
+    for (const k of ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist']) $(k).value = c[k] ?? '';
+    configLoaded = true;
+  }
+
+  const st = Object.fromEntries(s.stats.map((x) => [x.result, x.n]));
+  const totalR = s.stats.reduce((a, x) => a + x.n, 0);
+  $('stats').innerHTML = [
+    ['Total', totalR], ['Atendieron', st['atendió'] || 0], ['No atendieron', st['no atendió'] || 0],
+    ['Omitidos', st['omitido'] || 0], ['Errores', st['error'] || 0],
+  ].map(([k, v]) => `<div class="stat"><span class="muted">${k}</span><b>${v}</b></div>`).join('');
+  $('results').innerHTML = s.results.map((r) => {
+    const cls = r.result === 'atendió' ? 'res-atendió' : r.result === 'omitido' ? 'res-omitido' : 'res-no';
+    return `<tr><td>${esc(r.ts)}</td><td>${esc(r.phone)}</td><td>${esc(r.name)}</td><td class="${cls}">${esc(r.result)}</td><td class="detail">${esc(r.detail)}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted">Todavía no hay llamadas</td></tr>';
+}
+
+function fmtAge(sec) {
+  if (sec < 90) return Math.round(sec) + ' s';
+  if (sec < 5400) return Math.round(sec / 60) + ' min';
+  return Math.round(sec / 3600) + ' h';
+}
+
+async function cmd(c, arg = '') {
+  try {
+    await api('/api/command', { method: 'POST', body: JSON.stringify({ cmd: c, arg }) });
+    toast({ start: 'Orden de iniciar enviada', stop: 'Orden de detener enviada', test: 'Llamada de prueba enviada', reset: 'Volverá a empezar desde el primero' }[c]);
+    refresh();
+  } catch (e) { toast(e.message); }
+}
+
+function testCall() {
+  const n = $('testNumber').value.trim();
+  if (n.replace(/\D/g, '').length < 6) return toast('Poné un número para la prueba');
+  saveConfig(true).then(() => cmd('test', n));
+}
+
+async function saveConfig(silent) {
+  const body = {};
+  for (const k of ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist']) body[k] = $(k).value;
+  try {
+    await api('/api/config', { method: 'POST', body: JSON.stringify(body) });
+    if (!silent) toast('Configuración guardada');
+  } catch (e) { toast(e.message); }
+}
+
+async function uploadClients() {
+  const f = $('clientsFile').files[0];
+  if (!f) return toast('Elegí un archivo');
+  if (/\.xlsx?$/i.test(f.name)) return toast('Es un Excel: guardalo como CSV y subilo de nuevo');
+  const text = await f.text();
+  try {
+    const r = await (await api('/api/clients', { method: 'POST', body: JSON.stringify({ text }) })).json();
+    toast(`Lista subida: ${r.count} clientes`); $('clientsFile').value = ''; refresh();
+  } catch (e) { toast(e.message); }
+}
+
+async function uploadAudio() {
+  const f = $('audioFile').files[0];
+  if (!f) return toast('Elegí un audio');
+  if (f.size > 3_200_000) return toast('El audio es muy grande (máximo 3 MB)');
+  const b64 = await new Promise((ok, err) => {
+    const fr = new FileReader();
+    fr.onload = () => ok(String(fr.result).split(',')[1] || '');
+    fr.onerror = err; fr.readAsDataURL(f);
+  });
+  try {
+    await api('/api/audio', { method: 'POST', body: JSON.stringify({ name: f.name, b64 }) });
+    toast('Audio subido'); $('audioFile').value = ''; refresh();
+  } catch (e) { toast(e.message); }
+}
+
+async function loadPlayer() {
+  try {
+    const a = await (await api('/api/audio')).json();
+    if (!a.b64) return toast('Todavía no hay audio');
+    const p = $('player'); p.src = 'data:audio/*;base64,' + a.b64; p.classList.remove('hidden'); p.play().catch(() => {});
+  } catch (e) { toast(e.message); }
+}
+
+async function exportCsv() {
+  try {
+    const blob = await (await api('/api/results')).blob();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'resultados.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { toast(e.message); }
+}
+
+async function clearResults() {
+  if (!confirm('¿Borrar todos los resultados del panel?')) return;
+  try { await api('/api/results', { method: 'DELETE' }); toast('Resultados borrados'); refresh(); } catch (e) { toast(e.message); }
+}
+
+$('pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+if (KEY) api('/api/state').then(start).catch(() => {});
+</script>
+</body>
+</html>

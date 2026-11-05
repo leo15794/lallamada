@@ -26,6 +26,8 @@ class CampaignService : Service() {
     companion object {
         const val ACTION_STOP = "com.lallamada.app.STOP"
         const val EXTRA_TEST = "test_number"
+        const val ACTION_REMOTE_ON = "com.lallamada.app.REMOTE_ON"
+        const val ACTION_REMOTE_OFF = "com.lallamada.app.REMOTE_OFF"
         private const val CHANNEL = "campania"
     }
 
@@ -34,20 +36,81 @@ class CampaignService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            Live.stopRequested = true
-            try { ShellBridge.service?.stopPlay() } catch (_: Exception) {}
-            Live.worker?.interrupt()
-            if (!Live.running) stopSelf()
+        when (intent?.action) {
+            ACTION_STOP -> {
+                requestStop()
+                if (!Live.running && remote == null) stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_REMOTE_ON -> {
+                startInForeground()
+                startRemote()
+                return START_STICKY
+            }
+            ACTION_REMOTE_OFF -> {
+                stopRemote()
+                if (!Live.running) {
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+                return START_NOT_STICKY
+            }
+        }
+        if (intent == null) {
+            // El sistema reinició el servicio: solo se retoma el control remoto.
+            if (Store.bool(this, "remoteOn", false)) {
+                startInForeground()
+                startRemote()
+                return START_STICKY
+            }
+            stopSelf()
             return START_NOT_STICKY
         }
         startInForeground()
-        if (Live.running) return START_NOT_STICKY
+        startWork(intent.getStringExtra(EXTRA_TEST))
+        return if (remote != null) START_STICKY else START_NOT_STICKY
+    }
 
-        val test = intent?.getStringExtra(EXTRA_TEST)
+    // ---------- Control remoto (panel web) ----------
+
+    private var remote: RemoteSync? = null
+    private var remoteLock: PowerManager.WakeLock? = null
+
+    private fun startRemote() {
+        if (remote != null) return
+        remote = RemoteSync(this).also { it.start() }
+        val pm = getSystemService(PowerManager::class.java)
+        remoteLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lallamada:remoto").apply { acquire() }
+        updateNotification()
+    }
+
+    private fun stopRemote() {
+        remote?.stop()
+        remote = null
+        try { remoteLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
+        remoteLock = null
+        Live.remoteStatus = "Control remoto apagado"
+    }
+
+    override fun onDestroy() {
+        stopRemote()
+        super.onDestroy()
+    }
+
+    /** Pide detener la campaña o prueba en curso. */
+    fun requestStop() {
+        Live.stopRequested = true
+        try { ShellBridge.service?.stopPlay() } catch (_: Exception) {}
+        Live.worker?.interrupt()
+    }
+
+    /** Arranca la campaña (test == null) o una llamada de prueba. */
+    fun startWork(test: String?) {
+        if (Live.running) return
         Live.running = true
         Live.stopRequested = false
         acquireWakeLock()
+        updateNotification()
 
         val t = Thread {
             try {
@@ -63,18 +126,21 @@ class CampaignService : Service() {
                 }
                 Live.running = false
                 releaseWakeLock()
-                stopForeground(Service.STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                if (remote == null) {
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                } else {
+                    updateNotification()
+                }
             }
         }
         Live.worker = t
         t.start()
-        return START_NOT_STICKY
     }
 
     // ---------- Notificación obligatoria del servicio ----------
 
-    private fun startInForeground() {
+    private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, "Campaña de llamadas", NotificationManager.IMPORTANCE_LOW)
@@ -82,18 +148,31 @@ class CampaignService : Service() {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        val n: Notification = Notification.Builder(this, CHANNEL)
+        val text = when {
+            Live.running -> "Campaña de llamadas en curso"
+            remote != null -> "Control remoto activo: esperando órdenes del panel"
+            else -> "La Llamada"
+        }
+        return Notification.Builder(this, CHANNEL)
             .setContentTitle("La Llamada")
-            .setContentText("Campaña de llamadas en curso")
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_phone_call)
             .setContentIntent(open)
             .setOngoing(true)
             .build()
+    }
+
+    private fun startInForeground() {
+        val n = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, n)
         }
+    }
+
+    private fun updateNotification() {
+        try { getSystemService(NotificationManager::class.java).notify(1, buildNotification()) } catch (_: Exception) {}
     }
 
     @Suppress("DEPRECATION")
