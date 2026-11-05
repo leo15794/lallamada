@@ -148,6 +148,18 @@ class MainActivity : Activity() {
             Store.diagFile(this).delete()
             toast("Borrado")
         }
+
+        if (BuildConfig.DEBUG) handleAutoTest(intent)
+    }
+
+    /** Solo en la versión de prueba: permite que el emulador de GitHub dispare una llamada de prueba. */
+    private fun handleAutoTest(i: Intent?) {
+        if (i == null) return
+        val n = i.getStringExtra("auto_test_number") ?: return
+        message.setText(i.getStringExtra("auto_message") ?: "Mensaje de prueba")
+        testNumber.setText(n)
+        talk.setText("15")
+        handler.postDelayed({ startTest() }, 1500)
     }
 
     override fun onResume() {
