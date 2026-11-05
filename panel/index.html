@@ -52,6 +52,8 @@
   .res-atendió { color: var(--green); font-weight: 700; }
   .res-omitido { color: var(--muted); }
   .res-no { color: var(--red); font-weight: 700; }
+  .res-next { color: var(--primary); font-weight: 700; }
+  .res-pend { color: var(--muted); }
   .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .stat { flex: 1 1 120px; background: var(--field); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
   .stat b { display: block; font-size: 24px; }
@@ -186,6 +188,21 @@
     <p class="muted">El celular tiene que estar con el control remoto activado. La orden llega en unos segundos.</p>
   </section>
 
+  <!-- Lista de llamadas -->
+  <section class="card wide">
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <h2 style="margin:0;flex:3 1 200px">📋 Lista de llamadas</h2>
+      <input id="listSearch" placeholder="Buscar nombre o teléfono" oninput="renderList()" style="flex:2 1 200px">
+    </div>
+    <div class="muted" id="listSummary"></div>
+    <div class="tablewrap" style="max-height:440px;overflow-y:auto;margin-top:8px">
+      <table>
+        <thead><tr><th>#</th><th>Nombre</th><th>Teléfono</th><th>Estado</th></tr></thead>
+        <tbody id="list"></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- Resultados -->
   <section class="card wide">
     <div class="row" style="align-items:center;margin-bottom:8px">
@@ -262,6 +279,8 @@ async function refresh() {
   let s;
   try { s = await (await api('/api/state')).json(); } catch (e) { return; }
   const d = s.device;
+  const newIndex = d ? d.index : -1;
+  if (listTick++ % 4 === 0 || newIndex !== deviceIndex) { deviceIndex = newIndex; loadList(); }
   const age = d ? (s.now - d.updatedAt) / 1000 : Infinity;
   const online = age < 30;
   $('online').innerHTML = online
@@ -297,6 +316,33 @@ async function refresh() {
     const cls = r.result === 'atendió' ? 'res-atendió' : (r.result === 'omitido' || r.result === 'buzón') ? 'res-omitido' : 'res-no';
     return `<tr><td>${esc(r.ts)}</td><td>${esc(r.phone)}</td><td>${esc(r.name)}</td><td class="${cls}">${esc(r.result)}</td><td class="detail">${esc(r.detail)}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="muted">Todavía no hay llamadas</td></tr>';
+}
+
+let LIST = [];
+let listTick = 0;
+let deviceIndex = -1;
+
+async function loadList() {
+  try { LIST = (await (await api('/api/list')).json()).clients; renderList(); } catch (e) {}
+}
+
+function renderList() {
+  const q = ($('listSearch').value || '').toLowerCase().replace(/\s/g, '');
+  const called = LIST.filter((c) => c.result).length;
+  $('listSummary').textContent = LIST.length
+    ? `${LIST.length} clientes · ${called} con resultado · ${LIST.length - called} pendientes`
+    : 'Todavía no subiste una lista';
+  const rows = LIST.filter((c) => !q || (c.name || '').toLowerCase().replace(/\s/g, '').includes(q) || c.phone.includes(q));
+  $('list').innerHTML = rows.slice(0, 2000).map((c) => {
+    let st, cls;
+    if (c.pos === deviceIndex && !c.result) { st = '▶ próximo'; cls = 'res-next'; }
+    else if (!c.result) { st = 'pendiente'; cls = 'res-pend'; }
+    else {
+      st = c.result; cls = c.result === 'atendió' ? 'res-atendió' : (c.result === 'omitido' || c.result === 'buzón') ? 'res-omitido' : 'res-no';
+    }
+    const title = c.detail ? ` title="${esc(c.ts + ' · ' + c.detail)}"` : '';
+    return `<tr><td>${c.pos + 1}</td><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td class="${cls}"${title}>${esc(st)}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="muted">Sin resultados</td></tr>';
 }
 
 function fmtAge(sec) {
@@ -335,7 +381,7 @@ async function uploadClients() {
   const text = await readTextSmart(f);
   try {
     const r = await (await api('/api/clients', { method: 'POST', body: JSON.stringify({ text }) })).json();
-    toast(`Lista subida: ${r.count} clientes`); $('clientsFile').value = ''; refresh();
+    toast(`Lista subida: ${r.count} clientes`); $('clientsFile').value = ''; refresh(); loadList();
   } catch (e) { toast(e.message); }
 }
 
