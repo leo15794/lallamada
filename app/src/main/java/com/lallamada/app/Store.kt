@@ -21,8 +21,10 @@ object Live {
 
 /** Configuración, lista de clientes y resultados guardados en el teléfono. */
 object Store {
+    const val MODE_AUDIO = "audio"
     const val MODE_SPEAK = "hablar"
     const val MODE_DIAL_ONLY = "solo_marcar"
+    const val DEFAULT_SPEAKER = "Altavoz,Speaker,Parlante,Manos libres"
 
     const val DEFAULT_OPEN =
         "Bixby,Llamada de texto,Text call,Escribir respuesta,Responder escribiendo,Escribir,Type responses,Type,Teclado,Keyboard"
@@ -40,7 +42,10 @@ object Store {
     fun putBool(ctx: Context, key: String, v: Boolean) = p(ctx).edit().putBoolean(key, v).apply()
 
     fun message(ctx: Context) = str(ctx, "message", "")
-    fun mode(ctx: Context) = str(ctx, "mode", MODE_SPEAK)
+    fun mode(ctx: Context) = str(ctx, "mode", MODE_AUDIO)
+    fun kwSpeaker(ctx: Context) = splitList(str(ctx, "kwSpeaker", DEFAULT_SPEAKER))
+    fun audioFile(ctx: Context) = File(ctx.filesDir, "mensaje_audio")
+    fun audioName(ctx: Context) = str(ctx, "audioName", "")
     fun ringTimeout(ctx: Context) = int(ctx, "ring", 35)
     fun pauseSec(ctx: Context) = int(ctx, "pause", 20)
     fun talkSec(ctx: Context) = int(ctx, "talk", 0)
@@ -116,6 +121,16 @@ object Store {
         val f = resultsFile(ctx)
         if (!f.exists()) f.writeText("fecha,telefono,nombre,resultado,detalle\n")
         f.appendText(listOf(now(), c.phone, c.name, result, detail).joinToString(",") { csv(it) } + "\n")
+    }
+
+    /** Últimos resultados como listas de campos (fecha, teléfono, nombre, resultado, detalle). */
+    fun lastResults(ctx: Context, n: Int): List<List<String>> {
+        val f = resultsFile(ctx)
+        if (!f.exists()) return emptyList()
+        val re = Regex("\"([^\"]*)\"")
+        return f.readLines().drop(1).takeLast(n).reversed().map { line ->
+            re.findAll(line).map { it.groupValues[1] }.toList()
+        }
     }
 
     fun resultCount(ctx: Context): Int {

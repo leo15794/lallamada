@@ -180,6 +180,18 @@ class CallAccessibilityService : AccessibilityService() {
         return "Escribí el mensaje pero no encontré el botón Enviar"
     }
 
+    /** Activa el altavoz tocando su botón en la pantalla de llamada (si no está ya activo). */
+    fun pressSpeaker(keywords: List<String>): Boolean {
+        val btn = findByKeywords(roots(onlyCall = true), keywords) ?: return false
+        var x: AccessibilityNodeInfo? = btn
+        repeat(3) {
+            val n = x ?: return@repeat
+            if (n.isChecked || n.isSelected) return true
+            x = n.parent
+        }
+        return clickNode(btn)
+    }
+
     /** Cuelga tocando el botón de finalizar de la pantalla de llamada. */
     fun hangUpByUi(keywords: List<String>): Boolean {
         val btn = findByKeywords(roots(onlyCall = true), keywords) ?: return false

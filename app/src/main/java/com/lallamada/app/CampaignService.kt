@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -192,7 +195,13 @@ class CampaignService : Service() {
         val detail: String
         val talkMs: Long
         val configured = Store.talkSec(this)
-        if (Store.mode(this) == Store.MODE_SPEAK) {
+        val mode = Store.mode(this)
+        if (mode == Store.MODE_AUDIO) {
+            Live.status = "Reproduciendo el audio a $who"
+            detail = playAudioInCall()
+            diag("después del audio a ${c.phone}: $detail")
+            talkMs = 1500L
+        } else if (mode == Store.MODE_SPEAK) {
             val msg = Store.message(this)
             Live.status = "Diciendo el mensaje a $who"
             detail = Live.service?.speak(msg, Store.kwOpen(this), Store.kwSend(this))
@@ -212,6 +221,54 @@ class CampaignService : Service() {
         waitUntil(8000) { !inCall() }
         Live.inCall = false
         return "atendió" to (detail + if (clientHungUp) " | el cliente cortó antes del final" else "")
+    }
+
+    /**
+     * Android no deja meter audio dentro de una llamada. Vuelta: activar el altavoz de la llamada
+     * y reproducir el audio por el parlante para que lo capte el micrófono.
+     */
+    private fun playAudioInCall(): String {
+        val f = Store.audioFile(this)
+        if (!f.exists()) return "No hay audio cargado"
+        val am = getSystemService(AudioManager::class.java)
+        val notes = mutableListOf<String>()
+
+        @Suppress("DEPRECATION")
+        val speakerOn = am.isSpeakerphoneOn
+        if (!speakerOn) {
+            val ok = Live.service?.pressSpeaker(Store.kwSpeaker(this)) == true
+            notes.add(if (ok) "altavoz activado" else "NO pude activar el altavoz")
+            pause(900)
+        }
+
+        val stream = AudioManager.STREAM_MUSIC
+        val oldVol = am.getStreamVolume(stream)
+        try { am.setStreamVolume(stream, am.getStreamMaxVolume(stream), 0) } catch (_: Exception) {}
+
+        val mp = MediaPlayer()
+        try {
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            mp.setDataSource(f.absolutePath)
+            mp.prepare()
+            mp.start()
+            val dur = mp.duration.toLong().coerceAtLeast(1000L)
+            waitUntil(dur + 500L) { !inCall() }
+            notes.add(0, "audio reproducido (${dur / 1000} s)")
+        } catch (e: InterruptedException) {
+            throw e
+        } catch (e: Exception) {
+            notes.add(0, "error de audio: ${e.message}")
+        } finally {
+            try { mp.stop() } catch (_: Exception) {}
+            mp.release()
+            try { am.setStreamVolume(stream, oldVol, 0) } catch (_: Exception) {}
+        }
+        return notes.joinToString(", ")
     }
 
     // ---------- Campaña ----------
