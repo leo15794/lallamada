@@ -1,0 +1,226 @@
+
+########## 2026-11-06 13:07:00 ##########
+== marcando 1155550000 ==
+--- ventana: com.android.systemui (tipo 3)
+FrameLayout
+  FrameLayout id=status_bar_launch_animation_container
+  FrameLayout id=status_bar_container
+    FrameLayout id=status_bar
+      LinearLayout id=status_bar_contents
+        FrameLayout id=status_bar_start_side_container
+          FrameLayout id=status_bar_start_side_content
+            LinearLayout id=status_bar_start_side_except_heads_up
+              TextView id=clock text="1:07 " desc="1:07 PM"
+              FrameLayout id=notification_icon_area
+                ViewGroup id=notificationIcons
+                  ImageView desc="Phone notification: 1155550000"
+                  ImageView desc="Android System notification: "
+        FrameLayout id=status_bar_end_side_container
+          LinearLayout id=status_bar_end_side_content
+            LinearLayout id=system_icons
+              LinearLayout id=statusIcons
+                ImageView desc="Speakerphone enabled."
+                FrameLayout id=wifi_combo
+                  LinearLayout id=wifi_group
+                    FrameLayout id=wifi_combo
+                      ImageView id=wifi_signal desc="Wifi signal full."
+                FrameLayout id=mobile_combo desc="Phone signal full."
+                  LinearLayout id=mobile_group
+                    FrameLayout
+                      ImageView id=mobile_signal
+              LinearLayout id=battery desc="Battery charging, 100 percent."
+                ImageView
+  FrameLayout id=container
+    FrameLayout id=privacy_chip desc="Applications are using your microphone."
+      LinearLayout id=icons_container
+        ImageView
+--- ventana: com.google.android.dialer (tipo 1)
+FrameLayout
+  LinearLayout
+    FrameLayout
+      LinearLayout id=action_bar_root
+        FrameLayout id=content
+          FrameLayout
+            FrameLayout id=main
+              RelativeLayout id=incall_ui_container
+                LinearLayout id=incall_contact_grid_full_size
+                  RelativeLayout
+                    ImageView id=contactgrid_avatar desc="Quick contact for ‪1155550000‬"
+                  LinearLayout id=contactgrid_top_row
+                  TextView id=contactgrid_contact_name text="‪1155550000‬"
+                  LinearLayout id=contactgrid_bottom_row
+                    ViewAnimator id=contactgrid_bottom_text_switcher
+                      Chronometer id=contactgrid_bottom_timer text="00:00" desc="0 seconds"
+                FrameLayout id=voice_center_fragment_container
+                LinearLayout id=incall_button_grid_view_pager_container
+                  ViewPager id=incall_button_grid_pager
+                    ViewGroup id=incall_button_grid_page
+                      GridLayout id=incall_button_container
+                        ImageButton id=incall_first_button desc="Unmuted" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Mute"
+                        ImageButton id=incall_second_button desc="Keypad" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Keypad"
+                        ImageButton id=incall_third_button desc="Speaker, is on" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Speaker"
+                        ImageButton id=incall_fourth_button desc="Add call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Add call"
+                        ImageButton id=incall_fifth_button desc="Hold call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Hold"
+                ImageButton id=incall_end_call desc="End call" [click]
+                FrameLayout id=incall_dialpad_container
+
+
+########## 2026-11-06 13:07:01 ##########
+== atendió 1155550000 ==
+--- ventana: com.android.systemui (tipo 3)
+FrameLayout
+  FrameLayout id=status_bar_launch_animation_container
+  FrameLayout id=status_bar_container
+    FrameLayout id=status_bar
+      LinearLayout id=status_bar_contents
+        FrameLayout id=status_bar_start_side_container
+          FrameLayout id=status_bar_start_side_content
+            LinearLayout id=status_bar_start_side_except_heads_up
+              TextView id=clock text="1:07 " desc="1:07 PM"
+              FrameLayout id=notification_icon_area
+                ViewGroup id=notificationIcons
+                  ImageView desc="Phone notification: 1155550000"
+                  ImageView desc="Android System notification: "
+        FrameLayout id=status_bar_end_side_container
+          LinearLayout id=status_bar_end_side_content
+            LinearLayout id=system_icons
+              LinearLayout id=statusIcons
+                ImageView desc="Speakerphone enabled."
+                FrameLayout id=wifi_combo
+                  LinearLayout id=wifi_group
+                    FrameLayout id=wifi_combo
+                      ImageView id=wifi_signal desc="Wifi signal full."
+                FrameLayout id=mobile_combo desc="Phone signal full."
+                  LinearLayout id=mobile_group
+                    FrameLayout
+                      ImageView id=mobile_signal
+              LinearLayout id=battery desc="Battery charging, 100 percent."
+                ImageView
+  FrameLayout id=container
+    FrameLayout id=privacy_chip desc="Applications are using your microphone."
+      LinearLayout id=icons_container
+        ImageView
+--- ventana: com.google.android.dialer (tipo 1)
+FrameLayout
+  LinearLayout
+    FrameLayout
+      LinearLayout id=action_bar_root
+        FrameLayout id=content
+          FrameLayout
+            FrameLayout id=main
+              RelativeLayout id=incall_ui_container
+                LinearLayout id=incall_contact_grid_full_size
+                  RelativeLayout
+                    ImageView id=contactgrid_avatar desc="Quick contact for ‪1155550000‬"
+                  LinearLayout id=contactgrid_top_row
+                  TextView id=contactgrid_contact_name text="‪1155550000‬"
+                  LinearLayout id=contactgrid_bottom_row
+                    ViewAnimator id=contactgrid_bottom_text_switcher
+                      Chronometer id=contactgrid_bottom_timer text="00:01" desc="1 second"
+                FrameLayout id=voice_center_fragment_container
+                LinearLayout id=incall_button_grid_view_pager_container
+                  ViewPager id=incall_button_grid_pager
+                    ViewGroup id=incall_button_grid_page
+                      GridLayout id=incall_button_container
+                        ImageButton id=incall_first_button desc="Unmuted" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Mute"
+                        ImageButton id=incall_second_button desc="Keypad" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Keypad"
+                        ImageButton id=incall_third_button desc="Speaker, is on" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Speaker"
+                        ImageButton id=incall_fourth_button desc="Add call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Add call"
+                        ImageButton id=incall_fifth_button desc="Hold call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Hold"
+                ImageButton id=incall_end_call desc="End call" [click]
+                FrameLayout id=incall_dialpad_container
+
+
+########## 2026-11-06 13:07:07 ##########
+== después del audio a 1155550000: audio reproducido (4 s), refuerzo +15 dB, salida: multimedia ==
+--- ventana: com.android.systemui (tipo 3)
+FrameLayout
+  FrameLayout id=status_bar_launch_animation_container
+  FrameLayout id=container
+  FrameLayout id=status_bar_container
+    FrameLayout id=status_bar
+      LinearLayout id=status_bar_contents
+        FrameLayout id=status_bar_start_side_container
+          FrameLayout id=status_bar_start_side_content
+            LinearLayout id=status_bar_start_side_except_heads_up
+              TextView id=clock text="1:07 " desc="1:07 PM"
+              FrameLayout id=notification_icon_area
+                ViewGroup id=notificationIcons
+                  ImageView desc="Phone notification: 1155550000"
+                  ImageView desc="La Llamada notification: Campaña de llamadas en curso"
+                  ImageView desc="Android System notification: "
+        FrameLayout id=status_bar_end_side_container
+          LinearLayout id=status_bar_end_side_content
+            LinearLayout id=system_icons
+              LinearLayout id=statusIcons
+                ImageView desc="Speakerphone enabled."
+                FrameLayout id=wifi_combo
+                  LinearLayout id=wifi_group
+                    FrameLayout id=wifi_combo
+                      ImageView id=wifi_signal desc="Wifi signal full."
+                FrameLayout id=mobile_combo desc="Phone signal full."
+                  LinearLayout id=mobile_group
+                    FrameLayout
+                      ImageView id=mobile_signal
+              LinearLayout id=battery desc="Battery charging, 100 percent."
+                ImageView
+--- ventana: com.google.android.dialer (tipo 1)
+FrameLayout
+  LinearLayout
+    FrameLayout
+      LinearLayout id=action_bar_root
+        FrameLayout id=content
+          FrameLayout
+            FrameLayout id=main
+              RelativeLayout id=incall_ui_container
+                LinearLayout id=incall_contact_grid_full_size
+                  RelativeLayout
+                    ImageView id=contactgrid_avatar desc="Quick contact for ‪1155550000‬"
+                  LinearLayout id=contactgrid_top_row
+                  TextView id=contactgrid_contact_name text="‪1155550000‬"
+                  LinearLayout id=contactgrid_bottom_row
+                    ViewAnimator id=contactgrid_bottom_text_switcher
+                      Chronometer id=contactgrid_bottom_timer text="00:07" desc="7 seconds"
+                FrameLayout id=voice_center_fragment_container
+                LinearLayout id=incall_button_grid_view_pager_container
+                  ViewPager id=incall_button_grid_pager
+                    ViewGroup id=incall_button_grid_page
+                      GridLayout id=incall_button_container
+                        ImageButton id=incall_first_button desc="Unmuted" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Mute"
+                        ImageButton id=incall_second_button desc="Keypad" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Keypad"
+                        ImageButton id=incall_third_button desc="Speaker, is on" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Speaker"
+                        ImageButton id=incall_fourth_button desc="Add call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Add call"
+                        ImageButton id=incall_fifth_button desc="Hold call" [click]
+                          ImageView id=icon_view
+                          TextView id=label_view text="Hold"
+                ImageButton id=incall_end_call desc="End call" [click]
+                FrameLayout id=incall_dialpad_container
+
