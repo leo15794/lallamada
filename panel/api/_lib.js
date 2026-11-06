@@ -18,6 +18,7 @@ export const DEFAULT_CONFIG = {
   amdMachineMs: 3000,
   amdMaxMs: 5000,
   answerDelayMs: 1000,
+  skipCalled: 'all',
   capEnabled: false,
   capListenMs: 5000,
   capSilentMs: 3500,

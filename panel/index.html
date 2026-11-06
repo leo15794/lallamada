@@ -94,10 +94,23 @@
         <div class="chips" id="chips"></div>
       </div>
       <div style="flex:1 1 220px; display:grid; gap:10px">
-        <button class="good" onclick="cmd('start')">▶ Iniciar campaña</button>
+        <button class="good" onclick="startCampaign()">▶ Iniciar campaña</button>
         <button class="bad" onclick="cmd('stop')">■ Detener</button>
       </div>
     </div>
+    <div class="row" style="align-items:flex-end;margin-top:10px">
+      <div style="flex:3 1 260px">
+        <label for="skipCalled">Al iniciar, no volver a llamar a</label>
+        <select id="skipCalled" onchange="saveConfig(true)">
+          <option value="none">Nadie (llamar a toda la lista de nuevo)</option>
+          <option value="all">Los ya llamados (cualquier resultado)</option>
+          <option value="answered">Los que atendieron</option>
+          <option value="answered_vm">Los que atendieron o fueron buzón</option>
+        </select>
+      </div>
+      <button class="outline" onclick="pruneList(false)" style="flex:1 1 140px">Aplicar ahora</button>
+    </div>
+    <p class="muted">Los quitados salen de la lista de llamadas; sus resultados quedan guardados.</p>
     <p class="muted" id="pending"></p>
   </section>
 
@@ -226,14 +239,7 @@
         <option value="all">Ver todos</option>
       </select>
     </div>
-    <div class="row" style="align-items:center;margin-bottom:8px">
-      <select id="pruneMode" style="flex:2 1 240px">
-        <option value="all">Todos los ya llamados (cualquier resultado)</option>
-        <option value="answered">Solo los que atendieron</option>
-        <option value="answered_vm">Los que atendieron o fueron buzón</option>
-      </select>
-      <button class="outline" onclick="pruneList()" style="flex:1 1 160px">Quitar de la lista</button>
-    </div>
+
     <div class="muted" id="listSummary"></div>
     <div class="tablewrap" style="max-height:440px;overflow-y:auto;margin-top:8px">
       <table>
@@ -268,7 +274,7 @@ try { KEY = localStorage.getItem('ll_key') || ''; } catch (e) {}
 let configLoaded = false;
 // Estos se guardan en milisegundos pero en el panel se muestran en segundos.
 const MS_KEYS = ['amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs', 'capListenMs', 'capSilentMs'];
-const CFG_KEYS = ['ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist',
+const CFG_KEYS = ['skipCalled', 'ring', 'pause', 'hStart', 'hEnd', 'audioMethod', 'testNumber', 'blocklist',
   'amdEnabled', 'amdOnMachine', 'amdThresholdDb', 'amdInitialSilenceMs', 'amdSilenceEndMs', 'amdMachineMs', 'amdMaxMs', 'answerDelayMs',
   'capEnabled', 'capListenMs', 'capSilentMs', 'capSilentIsMachine', 'capMachineWords', 'capHumanWords'];
 let timer = null;
@@ -393,15 +399,24 @@ function renderList() {
   }).join('') || '<tr><td colspan="4" class="muted">Sin resultados</td></tr>';
 }
 
-async function pruneList() {
-  const sel = $('pruneMode');
-  const label = sel.options[sel.selectedIndex].text.toLowerCase();
-  if (!confirm(`¿Quitar de la lista: ${label}?\nLos resultados no se borran. El celular recibe la lista nueva cuando no esté llamando.`)) return;
+/** Quita de la lista a los ya llamados según "Al iniciar, no volver a llamar a". */
+async function pruneList(quiet) {
+  const mode = $('skipCalled').value;
+  if (mode === 'none') { if (!quiet) toast('Elegí a quiénes no volver a llamar'); return true; }
+  if (!quiet) {
+    const label = $('skipCalled').options[$('skipCalled').selectedIndex].text.toLowerCase();
+    if (!confirm(`¿Quitar de la lista a: ${label}?\nLos resultados no se borran.`)) return false;
+  }
   try {
-    const r = await (await api('/api/prune', { method: 'POST', body: JSON.stringify({ mode: sel.value }) })).json();
-    toast(r.removed ? `Quitados ${r.removed}. Quedan ${r.remaining} en la lista.` : 'No había nadie para quitar');
+    const r = await (await api('/api/prune', { method: 'POST', body: JSON.stringify({ mode }) })).json();
+    if (!quiet || r.removed) toast(r.removed ? `Quitados ${r.removed} ya llamados. Quedan ${r.remaining}.` : 'No había nadie para quitar');
     loadList(); refresh();
-  } catch (e) { toast(e.message); }
+    return true;
+  } catch (e) { toast(e.message); return false; }
+}
+
+async function startCampaign() {
+  if (await pruneList(true)) cmd('start');
 }
 
 function fmtAge(sec) {

@@ -22,6 +22,7 @@ export default async function handler(req, res) {
   if (METHODS.includes(body.audioMethod)) cfg.audioMethod = body.audioMethod;
   if (body.amdEnabled !== undefined) cfg.amdEnabled = body.amdEnabled === true || body.amdEnabled === 'true';
   if (['cortar', 'dejar'].includes(body.amdOnMachine)) cfg.amdOnMachine = body.amdOnMachine;
+  if (['none', 'all', 'answered', 'answered_vm'].includes(body.skipCalled)) cfg.skipCalled = body.skipCalled;
   for (const k of ['capEnabled', 'capSilentIsMachine']) {
     if (body[k] !== undefined) cfg[k] = body[k] === true || body[k] === 'true';
   }
